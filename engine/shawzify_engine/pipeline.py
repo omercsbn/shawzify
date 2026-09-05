@@ -27,6 +27,7 @@ from .common.logging import get_logger
 from .common.progress import ProgressReporter
 from .common.safety import classify_input, resolve_input_path
 from .midi.reader import MidiFileData, choose_melody_track, parse_midi
+from .music.cleanup import clean_transcription
 from .music.events import NoteEvent
 from .music.key import KeyEstimate, estimate_key
 from .shawzin.instrument import load_instrument
@@ -298,6 +299,23 @@ def load_source(
             {"backend": backend_id, "events": [e.to_dict() for e in events]},
         )
     reporter.finish("transcribe", "Found " + str(len(events)) + " notes")
+
+    # A transcription is not a score. The notes it invents are few and they are
+    # ruinous, because everything downstream reads the extremes of the note set
+    # rather than its body: on one measured track, 135 notes out of 4829 pushed
+    # pitch accuracy from 56% down to 4.6%.
+    if events:
+        events, cleanup = clean_transcription(events)
+        log.event(
+            "transcription.cleanup",
+            kept=cleanup.kept,
+            outliers=cleanup.outliers_removed,
+            merged=cleanup.fragments_merged,
+            dropped=cleanup.fragments_removed,
+        )
+        note = cleanup.summary()
+        if note:
+            warnings.append(note)
 
     if not events:
         warnings.append(
