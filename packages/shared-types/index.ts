@@ -455,6 +455,8 @@ export interface LiveStats {
   total: number;
   mean_error_ms: number;
   max_error_ms: number;
+  /** How much later the performance ended than it started; drift, not lateness. */
+  drift_ms: number;
   stopped_early: boolean;
   stop_reason: string | null;
 }
