@@ -138,6 +138,22 @@ def _reporter(request_id: int) -> ProgressReporter:
 # -- methods -------------------------------------------------------------
 
 
+def _required(params: dict[str, Any], name: str) -> Any:
+    """Fetch a required parameter, or say which one is missing.
+
+    Indexing params directly turns a malformed request into KeyError with a
+    traceback, which reaches the user as "SHAWZIFY hit an unexpected problem".
+    A caller that got the request wrong deserves to be told what it got wrong.
+    """
+    if name not in params or params[name] is None:
+        raise ShawzifyError(
+            "That request is missing '" + name + "'.",
+            hint="This is a bug in whatever called the engine, not in your song.",
+            technical="params: " + ", ".join(sorted(params)) or "params: (none)",
+        )
+    return params[name]
+
+
 def m_ping(_params: dict[str, Any], _request_id: int) -> dict[str, Any]:
     return {"ok": True, "versions": version_dict()}
 
@@ -159,7 +175,7 @@ def m_analyze(params: dict[str, Any], request_id: int) -> dict[str, Any]:
     options = ArrangementOptions.from_dict(params.get("options") or {})
     reporter = _reporter(request_id)
     source = load_source(
-        params["path"],
+        _required(params, "path"),
         options,
         progress=reporter,
         cache=SESSION.cache,
@@ -176,7 +192,7 @@ def m_analyze(params: dict[str, Any], request_id: int) -> dict[str, Any]:
 
 
 def m_arrange(params: dict[str, Any], request_id: int) -> dict[str, Any]:
-    source_id = params["sourceId"]
+    source_id = _required(params, "sourceId")
     source = SESSION.sources.get(source_id)
     if source is None:
         raise ShawzifyError(
@@ -250,7 +266,7 @@ def m_identify(params: dict[str, Any], _request_id: int) -> dict[str, Any]:
     """Metadata for a link, without downloading anything."""
     from .sources import SourceResolver
 
-    return SourceResolver(SESSION.cache).preview(params["target"]).to_dict()
+    return SourceResolver(SESSION.cache).preview(_required(params, "target")).to_dict()
 
 
 def m_search(params: dict[str, Any], _request_id: int) -> dict[str, Any]:
@@ -258,7 +274,7 @@ def m_search(params: dict[str, Any], _request_id: int) -> dict[str, Any]:
     from .sources import SourceResolver
 
     resolver = SourceResolver(SESSION.cache)
-    found = resolver.search(params["query"], limit=int(params.get("limit", 6)))
+    found = resolver.search(_required(params, "query"), limit=int(params.get("limit", 6)))
     return {"results": [c.to_dict() for c in found]}
 
 
@@ -274,7 +290,7 @@ def m_fetch(params: dict[str, Any], request_id: int) -> dict[str, Any]:
         reporter.update("decode", fraction, message)
 
     resolved = resolver.fetch(
-        params["target"],
+        _required(params, "target"),
         progress=report,
         candidate_index=int(params.get("candidateIndex", 0)),
     )
@@ -344,7 +360,7 @@ def m_spotify_credentials(params: dict[str, Any], _request_id: int) -> dict[str,
     from .sources.spotify import SpotifyCredentials, SpotifyProvider
 
     if params.get("save") is not None:
-        data = params["save"] or {}
+        data = params.get("save") or {}
         credentials = SpotifyCredentials(
             client_id=str(data.get("clientId", "")).strip(),
             client_secret=str(data.get("clientSecret", "")).strip(),
@@ -368,7 +384,7 @@ def m_decode(params: dict[str, Any], _request_id: int) -> dict[str, Any]:
     from .shawzin.instrument import load_instrument
     from .shawzin.songcode import describe
 
-    return describe(params["code"], load_instrument(params.get("variant", "dax")))
+    return describe(_required(params, "code"), load_instrument(params.get("variant", "dax")))
 
 
 def m_preview(params: dict[str, Any], _request_id: int) -> dict[str, Any]:
@@ -405,9 +421,9 @@ def m_export(params: dict[str, Any], _request_id: int) -> dict[str, Any]:
     from .preview.synth import write_preview_wav
     from .project import build_project, remember_project, save_project
 
-    source_id = params["sourceId"]
-    kind = params["kind"]
-    target = safe_output_path(params["path"])
+    source_id = _required(params, "sourceId")
+    kind = _required(params, "kind")
+    target = safe_output_path(_required(params, "path"))
     source = SESSION.sources.get(source_id)
     arrangement = SESSION.arrangements.get(source_id)
     if source is None or arrangement is None:
@@ -454,7 +470,7 @@ def m_open_project(params: dict[str, Any], request_id: int) -> dict[str, Any]:
     from .project import load_project
     from .shawzin.instrument import load_instrument
 
-    project = load_project(params["path"])
+    project = load_project(_required(params, "path"))
     options = project.arrangement_options()
     instrument = load_instrument(options.shawzin_variant)
     events = project.events()
@@ -496,7 +512,7 @@ def m_keymap(params: dict[str, Any], _request_id: int) -> dict[str, Any]:
     from .live.keymap import BINDING_LABELS, DEFAULT_BINDINGS, WarframeKeymap
 
     if params.get("save"):
-        keymap = WarframeKeymap.from_dict(params["save"])
+        keymap = WarframeKeymap.from_dict(_required(params, "save"))
         keymap.save()
     else:
         keymap = WarframeKeymap.load()
