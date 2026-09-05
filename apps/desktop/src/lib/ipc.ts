@@ -78,23 +78,168 @@ export function transport(): Transport {
 
 const webToken = (): string => window.__SHAWZIFY_WEB__?.token ?? '';
 
+// -- web transport health -------------------------------------------------
+
+type ProgressHandler = (payload: ProgressPayload) => void;
+const progressHandlers = new Map<number, ProgressHandler>();
+
+/**
+ * Whether the page can still reach the local server.
+ *
+ * `offline` and `stale` are different problems with different fixes. A stopped
+ * server may come back on the same URL, so retrying is worth it; a restarted
+ * one issues a new token, which leaves this page permanently unauthorised and
+ * retrying pointless. The UI says which of the two happened.
+ */
+export type Connection = 'connected' | 'reconnecting' | 'offline' | 'stale';
+
+let connection: Connection = 'connected';
+const connectionListeners = new Set<(state: Connection) => void>();
+
+export function connectionState(): Connection {
+  return connection;
+}
+
+function setConnection(next: Connection): void {
+  if (connection === next) return;
+  connection = next;
+  for (const handler of connectionListeners) handler(next);
+}
+
+let stream: EventSource | null = null;
+let retryTimer: ReturnType<typeof setTimeout> | undefined;
+let retryAttempt = 0;
+
+/** Ask the server whether it is alive, and whether this page's token still is. */
+async function probe(): Promise<Connection> {
+  try {
+    const response = await fetch('/api/rpc?token=' + encodeURIComponent(webToken()), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ method: 'ping', params: {} }),
+    });
+    if (response.status === 403) return 'stale';
+    return response.ok ? 'connected' : 'offline';
+  } catch {
+    return 'offline';
+  }
+}
+
+function openStream(): void {
+  if (stream || typeof EventSource === 'undefined') return;
+  const source = new EventSource('/api/events?token=' + encodeURIComponent(webToken()));
+  stream = source;
+
+  source.onopen = () => {
+    retryAttempt = 0;
+    setConnection('connected');
+  };
+
+  source.onmessage = (event) => {
+    try {
+      const message = JSON.parse(event.data) as {
+        id: number;
+        event: string;
+        payload: ProgressPayload;
+      };
+      const handler = progressHandlers.get(message.id);
+      if (handler && message.event === 'progress') handler(message.payload);
+    } catch {
+      /* a malformed frame is not worth breaking the stream over */
+    }
+  };
+
+  source.onerror = () => {
+    // Left alone, EventSource retries every few seconds forever, with no
+    // backoff and a console error per attempt -- hundreds of them if the
+    // server stays down. Take the retry over so it backs off, and so it can
+    // stop entirely when retrying cannot possibly work.
+    source.close();
+    if (stream === source) stream = null;
+    if (connection === 'connected') setConnection('reconnecting');
+    scheduleReconnect();
+  };
+}
+
+function scheduleReconnect(): void {
+  if (retryTimer !== undefined || connection === 'stale') return;
+  const delay = Math.min(30000, 1000 * 2 ** retryAttempt);
+  retryAttempt += 1;
+  retryTimer = setTimeout(() => {
+    retryTimer = undefined;
+    void probe().then((state) => {
+      setConnection(state);
+      if (state === 'connected') openStream();
+      else if (state !== 'stale') scheduleReconnect();
+    });
+  }, delay);
+}
+
+/** Retry immediately instead of waiting out the backoff. */
+export function reconnect(): void {
+  if (retryTimer !== undefined) {
+    clearTimeout(retryTimer);
+    retryTimer = undefined;
+  }
+  retryAttempt = 0;
+  if (connection === 'stale') setConnection('offline');
+  scheduleReconnect();
+}
+
+/**
+ * Subscribe to transport health; the handler is called immediately with the
+ * current state. On the web transport this also starts the event stream, which
+ * is what notices a server going away in the first place.
+ */
+export function onConnection(handler: (state: Connection) => void): () => void {
+  connectionListeners.add(handler);
+  if (!isTauri() && isWeb()) openStream();
+  handler(connection);
+  return () => {
+    connectionListeners.delete(handler);
+  };
+}
+
 /** Call an engine method over HTTP, in the shape the Tauri command uses. */
 async function webCall<T>(method: string, params: Record<string, unknown>): Promise<T> {
-  const response = await fetch('/api/rpc?token=' + encodeURIComponent(webToken()), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ method, params }),
-  });
+  let response: Response;
+  try {
+    response = await fetch('/api/rpc?token=' + encodeURIComponent(webToken()), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ method, params }),
+    });
+  } catch (err) {
+    // fetch only rejects when the request never reached a server at all.
+    setConnection('offline');
+    scheduleReconnect();
+    throw normalizeError({
+      code: 'server_gone',
+      message: 'The SHAWZIFY server is not running, so nothing can be processed.',
+      hint: 'Start it again with: scripts\\dev.ps1 -Cli web, then open the link it prints.',
+      technical: String(err),
+    });
+  }
+  if (response.status === 403) {
+    setConnection('stale');
+    throw normalizeError({
+      code: 'web_transport',
+      message: 'This page is from an earlier run of the server, so its token expired.',
+      hint: 'Open the link the current server printed.',
+      technical: null,
+    });
+  }
   if (!response.ok) {
     throw normalizeError({
       code: 'web_transport',
-      message:
-        response.status === 403
-          ? 'This page is no longer authorised. Reload it from the link SHAWZIFY printed.'
-          : 'The SHAWZIFY engine returned ' + response.status + '.',
+      message: 'The SHAWZIFY engine returned ' + response.status + '.',
       hint: null,
       technical: null,
     });
+  }
+  if (connection !== 'connected') {
+    setConnection('connected');
+    openStream();
   }
   const payload = (await response.json()) as { result?: T; error?: EngineError };
   if (payload.error) throw normalizeError(payload.error);
@@ -216,8 +361,6 @@ export function newRequestId(): number {
   return nextRequestId;
 }
 
-type ProgressHandler = (payload: ProgressPayload) => void;
-const progressHandlers = new Map<number, ProgressHandler>();
 let progressBound = false;
 
 async function bindProgress(): Promise<void> {
@@ -225,22 +368,10 @@ async function bindProgress(): Promise<void> {
   progressBound = true;
 
   if (!isTauri() && isWeb()) {
-    // The web transport streams the same events over SSE. It reconnects on
-    // its own, so a dropped connection does not silently kill progress.
-    const source = new EventSource('/api/events?token=' + encodeURIComponent(webToken()));
-    source.onmessage = (event) => {
-      try {
-        const message = JSON.parse(event.data) as {
-          id: number;
-          event: string;
-          payload: ProgressPayload;
-        };
-        const handler = progressHandlers.get(message.id);
-        if (handler && message.event === 'progress') handler(message.payload);
-      } catch {
-        /* a malformed frame is not worth breaking the stream over */
-      }
-    };
+    // The web transport streams the same events over SSE. openStream() owns
+    // the connection so that a server going away backs off rather than
+    // retrying forever.
+    openStream();
     return;
   }
 

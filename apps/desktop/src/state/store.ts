@@ -21,7 +21,16 @@ import type {
   WarframeStatus,
 } from '@shawzify/shared-types';
 
-import { ShawzifyError, engine, live, system, transport } from '@/lib/ipc';
+import type { Connection } from '@/lib/ipc';
+import {
+  ShawzifyError,
+  connectionState,
+  engine,
+  live,
+  onConnection,
+  system,
+  transport,
+} from '@/lib/ipc';
 
 export type View = 'home' | 'workspace' | 'settings' | 'diagnostics';
 export type PreviewTarget = 'source' | 'arrangement';
@@ -60,6 +69,8 @@ interface AppStore {
   providers: ProviderInfo[];
   spotify: SpotifyCredentialsDto | null;
   transport: 'tauri' | 'web' | 'none';
+  /** Web transport only: whether the local server is still reachable. */
+  connection: Connection;
   engineReady: boolean;
   engineMessage: string | null;
   onboarded: boolean;
@@ -121,6 +132,23 @@ let toastId = 0;
 /** Guards against a slow analysis overwriting a newer one. */
 let latestRun = 0;
 
+let connectionWatched = false;
+
+/**
+ * Mirror transport health into the store, once per page.
+ *
+ * The browser transport can lose its server at any time -- it is a separate
+ * process the user started -- and unlike the desktop shell nothing else would
+ * notice, because the web bridge answers `engine_status` locally.
+ */
+function watchConnection(set: (partial: Partial<AppStore>) => void): void {
+  if (connectionWatched) return;
+  connectionWatched = true;
+  onConnection((state) => {
+    set({ connection: state });
+  });
+}
+
 export const useStore = create<AppStore>((set, get) => ({
   view: 'home',
   environment: null,
@@ -131,6 +159,7 @@ export const useStore = create<AppStore>((set, get) => ({
   providers: [],
   spotify: null,
   transport: transport(),
+  connection: connectionState(),
   engineReady: false,
   engineMessage: null,
   onboarded: (() => {
@@ -196,6 +225,7 @@ export const useStore = create<AppStore>((set, get) => ({
   setUseStems: (useStems) => set({ useStems }),
 
   async bootstrap() {
+    watchConnection(set);
     try {
       const status = await engine.status();
       if (!status.running) await engine.start();

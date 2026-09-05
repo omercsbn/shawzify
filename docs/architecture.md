@@ -54,6 +54,14 @@ refuses any other host at construction time, requires a startup token on every
 request, rejects cross-origin requests, and only serves media from inside
 SHAWZIFY's own cache.
 
+The browser transport also has a failure the desktop one does not: its server
+can be stopped while a page stays open. `EventSource` would then retry the dead
+port every few seconds forever, silently, so `lib/ipc.ts` owns the retry
+instead — closing the failed stream, backing off to a 30 s ceiling, and probing
+with a `ping` to tell the two cases apart. A stopped server may return, so it
+keeps trying and reconnects; a *restarted* one has a new token, which makes this
+page permanently unauthorised, so it stops and says to open the new link.
+
 ## Where music comes from
 
 `sources/` is a provider interface with three implementations, all of which end
