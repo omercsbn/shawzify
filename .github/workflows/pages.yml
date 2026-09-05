@@ -14,6 +14,7 @@ on:
       - 'apps/desktop/src/**'
       - 'apps/desktop/package-lock.json'
       - 'scripts/build_demo_fixture.py'
+      - 'assets/screenshots/**'
   workflow_dispatch:
 
 permissions:

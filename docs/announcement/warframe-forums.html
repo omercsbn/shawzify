@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SHAWZIFY — forum post, ready to paste</title>
+<style>
+  /* Only for reading it here. Forum editors keep the structure, not the CSS. */
+  body { max-width: 780px; margin: 2rem auto; padding: 0 1.25rem;
+         font: 16px/1.65 -apple-system, 'Segoe UI', system-ui, sans-serif;
+         color: #1b1b1f; background: #fff; }
+  .howto { background: #f4f4f6; border-left: 3px solid #E8A84C; padding: 1rem 1.2rem;
+           margin-bottom: 2.5rem; font-size: 0.92rem; color: #444; }
+  .howto p { margin: 0.4rem 0; }
+  .post { border-top: 2px solid #e3e3e6; padding-top: 1.5rem; }
+  img { max-width: 100%; height: auto; border-radius: 6px; }
+  h2 { font-size: 1.2rem; margin: 2rem 0 0.6rem; }
+  li { margin: 0.35rem 0; }
+  code { background: #f1f1f3; padding: 0.1em 0.35em; border-radius: 3px; font-size: 0.9em; }
+</style>
+</head>
+<body>
+
+<div class="howto">
+  <p><strong>How to use this file:</strong> select everything below the line
+  (click into the post, then Ctrl+A selects the whole page — that is fine, the
+  box you are reading is small), copy, and paste into the Warframe forum editor.
+  Formatting and images come across.</p>
+  <p><strong>Where:</strong> a new topic in
+  <a href="https://forums.warframe.com/forum/17-fan-zone/">Fan Zone</a>.
+  <strong>Title:</strong> SHAWZIFY — turn any song into a Shawzin performance
+  (free, open source)</p>
+  <p><strong>Better:</strong> after pasting, re-upload the three images through
+  the forum's own attach button. Hotlinks survive until something moves; forum
+  uploads do not.</p>
+</div>
+
+<div class="post">
+
+<p>The Shawzin has twelve notes. Most music does not.</p>
+
+<p>Every tool I could find takes a MIDI file and maps note numbers onto Shawzin
+keys, which works right up until the music does not fit — and it usually does
+not fit. Notes fall outside the range and get clamped. Chords need one fret
+position and get mangled. The tune survives on paper and dies in your ears.</p>
+
+<p>So I spent a while building the other half: <strong>SHAWZIFY takes a song and
+decides what should survive.</strong></p>
+
+<p><img src="https://omercsbn.github.io/shawzify/screenshots/workspace.png"
+        alt="The SHAWZIFY workspace: waveform, piano roll of the arrangement, compatibility breakdown and song structure"></p>
+
+<p>Drop in an MP3, a WAV, a MIDI file, or paste a YouTube link. It separates the
+stems, transcribes the notes, works out the key and the tempo, finds where the
+chorus is — and then arranges it for the instrument you are actually holding.
+Out comes a song code you paste into the game.</p>
+
+<p><strong>What "arranging" means here:</strong></p>
+
+<ul>
+  <li>Every note is scored for importance — confidence, velocity, whether it is
+      carrying the melody, where it sits in its phrase — and reductions start
+      from the bottom.</li>
+  <li>All nine scales are searched at every transposition, scored on how much of
+      the music each one keeps.</li>
+  <li>The melody is mapped as a <em>path</em>, not note by note, so the line
+      keeps its shape instead of jumping octaves at the range boundary.</li>
+  <li>Chords reduce by harmonic function — root and third before the fifth — and
+      fall back to the Shawzin's own chord positions when they fit.</li>
+  <li>Dense passages are thinned only where they are actually too dense.</li>
+  <li>Nothing is silently truncated. A song past the four-minute or 1000-note
+      limit is split at phrase boundaries into parts you import one after
+      another.</li>
+</ul>
+
+<p><img src="https://omercsbn.github.io/shawzify/screenshots/panels.png"
+        alt="The compatibility breakdown, the detected song structure, and the ranked Shawzin recommendation"></p>
+
+<p><strong>It also tells you which Shawzin to play it on.</strong> The eleven
+variants differ in polyphony, sustain and tone, and two of them change what is
+even playable. SHAWZIFY measures the music and ranks them with the reasoning
+shown — a fast line does not want a 28-second sustain, a chord piece wants
+something polyphonic.</p>
+
+<p><strong>And it tells you what it did to your song.</strong> Every changed note
+carries a reason, and the piano roll colours them: played as written, moved to
+fit, folded into a chord, arpeggiated, removed.</p>
+
+<p><img src="https://omercsbn.github.io/shawzify/screenshots/warnings.png"
+        alt="The warnings panel listing how many notes were removed, shifted or arpeggiated and why"></p>
+
+<p><strong>Try it without installing anything:</strong> the interface is
+published at
+<a href="https://omercsbn.github.io/shawzify/demo/">omercsbn.github.io/shawzify/demo</a>
+— that is the real app, replaying a real conversion. Switch modes, poke at the
+panels, see what it produces.</p>
+
+<p><strong>Downloads and source:</strong>
+<a href="https://github.com/omercsbn/shawzify">github.com/omercsbn/shawzify</a></p>
+
+<p>It also plays the arrangement in game if you want it to — ordinary key
+presses, the same ones your keyboard sends, and only while Warframe is the
+focused window. It does not inject anything, read or write game memory, hook the
+client, or touch anti-cheat in any way. The focus check runs before every note
+and cannot be switched off; alt-tab away and it stops. Everything else — the
+whole conversion — runs offline on your own machine, and nothing about your
+music is ever uploaded.</p>
+
+<p>Free, MIT licensed, and the source is all there, including
+<a href="https://github.com/omercsbn/shawzify/blob/main/docs/research/shawzin-format.md">the
+format research</a> and credit to the tools I learned the song-code format
+from.</p>
+
+<p><strong>What would help most:</strong> a song it arranges badly. Post the
+track and the settings and I will look at what the engine did wrong — the
+arrangement is a pile of musical judgement calls, and the only way to know one
+is wrong is to hear it go wrong.</p>
+
+<p><em>SHAWZIFY is an independent fan project. It is not affiliated with or
+endorsed by Digital Extremes.</em></p>
+
+</div>
+</body>
+</html>
