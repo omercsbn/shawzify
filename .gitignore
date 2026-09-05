@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+dist/
+build/
+
+# Node
+node_modules/
+apps/desktop/dist/
+*.tsbuildinfo
+npm-debug.log*
+
+# Rust
+target/
+apps/desktop/src-tauri/gen/
+
+# Model weights and caches: these are large and download on demand
+*.pt
+*.th
+*.ckpt
+*.onnx
+*.safetensors
+models/
+.cache/
+
+# Generated demo material (scripts/setup.ps1 recreates it)
+assets/demo/*.wav
+assets/demo/*.mid
+assets/demo/*.shawzin.txt
+
+# Local outputs
+*.shawzify
+*.shawzin.txt
+*.analysis.json
+*.preview.wav
+*.arranged.mid
+*.source.mid
+
+# OS and editors
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+.hypothesis/
