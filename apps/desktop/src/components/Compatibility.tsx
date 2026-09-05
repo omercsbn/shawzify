@@ -19,8 +19,12 @@ function BigNumber({
       <div className="label mb-1">{label}</div>
       <motion.div
         key={`${label}-${value.toFixed(1)}`}
-        initial={{ opacity: 0, y: 6 }}
-        animate={{ opacity: 1, y: 0 }}
+        // Deliberately not a fade. An opacity animation that never runs -- a
+        // background tab where requestAnimationFrame is throttled, a headless
+        // render -- leaves the score invisible, and the score is the point of
+        // the panel. Movement is decoration; the number must always be drawn.
+        initial={{ y: 6, scale: 0.97 }}
+        animate={{ y: 0, scale: 1 }}
         transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
         className={`text-[2.75rem] leading-none font-semibold tabular-nums tracking-[-0.03em] ${
           tone === 'amber' ? 'text-amber' : 'text-paper-faint'
