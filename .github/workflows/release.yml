@@ -52,6 +52,13 @@ jobs:
         working-directory: apps/desktop
         run: npm ci
 
+      - name: Build the frontend
+        # cargo test builds the Tauri crate, whose build script fails outright
+        # when apps/desktop/dist is missing. CI does this too; leaving it out
+        # here meant the release could never pass its own tests.
+        working-directory: apps/desktop
+        run: npm run build
+
       - name: Run every suite
         # A release that fails its own tests is not a release.
         run: ./scripts/test.ps1
