@@ -353,7 +353,6 @@ export const useStore = create<AppStore>((set, get) => ({
    * to the local server first. Projects and songs both arrive this way.
    */
   async openUploaded(file) {
-    const { system } = await import('@/lib/ipc');
     set({ analyzing: true, error: null, view: 'workspace' });
     let path: string;
     try {

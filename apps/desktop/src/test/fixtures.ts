@@ -354,7 +354,7 @@ export const environmentFixture: EnvironmentDto = {
   platform: 'Windows-11',
   ffmpeg: { available: true, version: 'ffmpeg 7.1', source: 'imageio', hasFfprobe: false },
   librosa: true,
-  gpu: { cuda: true, device: 'NVIDIA GeForce RTX 4080 SUPER', torch: '2.14.0' },
+  gpu: { cuda: true, device: 'A CUDA GPU', torch: '2.14.0' },
   transcribers: [
     { id: 'basic_pitch', name: 'Basic Pitch (polyphonic)', available: true, polyphonic: true },
     { id: 'cqt', name: 'Built-in multi-pitch (CQT)', available: true, polyphonic: true },
