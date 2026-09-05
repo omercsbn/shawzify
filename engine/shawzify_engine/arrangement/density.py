@@ -89,9 +89,8 @@ def reduce_density(
     times = [e.start_seconds for e in events]
     max_in_window = max(1, int(round(budget * window)))
 
-    def worst_window() -> tuple[int, int, int] | None:
-        """Return (start_index, end_index_exclusive, count) of the densest window."""
-        live = [i for i in range(n) if alive[i]]
+    def worst_window(live: list[int]) -> tuple[int, int, int] | None:
+        """``(start, end_exclusive, count)`` of the densest window, over live indices."""
         if not live:
             return None
         best: tuple[int, int, int] | None = None
@@ -104,15 +103,17 @@ def reduce_density(
                 best = (j, k + 1, count)
         return best
 
+    # The live list is maintained incrementally rather than rebuilt each round:
+    # rebuilding it made the whole pass quadratic on dense material.
+    live = list(range(n))
     removed: list[int] = []
     guard = 0
     while guard < n * 2:
         guard += 1
-        live = [i for i in range(n) if alive[i]]
-        w = worst_window()
+        w = worst_window(live)
         if w is None or w[2] <= max_in_window:
             break
-        window_indices = [live[x] for x in range(w[0], w[1])]
+        window_indices = live[w[0] : w[1]]
         candidates = [i for i in window_indices if i not in protected]
         if not candidates:
             candidates = window_indices
@@ -121,6 +122,7 @@ def reduce_density(
         victim = min(candidates, key=lambda i: (effective[i], -times[i]))
         alive[victim] = False
         removed.append(victim)
+        live.pop(w[0] + window_indices.index(victim))
 
     kept = [i for i in range(n) if alive[i]]
     peak = measure_density([events[i] for i in kept], window)
