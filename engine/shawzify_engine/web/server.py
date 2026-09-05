@@ -342,12 +342,16 @@ class Handler(BaseHTTPRequestHandler):
             content_type += "; charset=utf-8"
         body = candidate.read_bytes()
         if candidate.name == "index.html":
-            # Hand the page its own token so the app can authenticate itself.
+            # Mark the page as served by this server, so the app knows which
+            # transport it is on. Deliberately no token: the document is not
+            # itself authorised (the browser fetches its assets without one),
+            # so anything written into it is readable by any local process.
+            # The page takes its token from its own URL instead.
             body = body.replace(
                 b"</head>",
                 (
-                    '<script>window.__SHAWZIFY_WEB__={token:"'
-                    + self.app.token
+                    '<script>window.__SHAWZIFY_WEB__={server:"shawzify",version:"'
+                    + APP_VERSION
                     + '"};</script></head>'
                 ).encode("utf-8"),
                 1,
@@ -450,8 +454,8 @@ def serve(
         print("    The interface is not built. Run 'npm run build' in apps/desktop,")
         print("    then reload. The API works regardless.")
         print()
-    print("    Bound to 127.0.0.1 only. The token in the URL is required for")
-    print("    every request, so nothing else on this machine can drive it.")
+    print("    Bound to 127.0.0.1 only. Every API request needs the token in")
+    print("    that link, so keep it to yourself -- it is the whole key.")
     print("    Press Ctrl+C to stop.")
     print()
     if open_browser:

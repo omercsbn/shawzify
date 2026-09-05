@@ -576,13 +576,18 @@ def test_cross_origin_requests_are_refused(web_server):
         assert exc.code == 403
 
 
-def test_the_page_is_served_and_carries_its_token(web_server):
+def test_the_page_is_served_without_handing_out_the_token(web_server):
+    """The document is not itself authorised, so it must carry no secret.
+
+    The browser fetches index.html and its assets without a token -- it cannot
+    add one to a <script src>. That makes the page readable by anything running
+    on this machine, so the token lives in the page's URL, not in the page.
+    """
     url = "http://127.0.0.1:" + str(web_server.port) + "/"
     with urllib.request.urlopen(url, timeout=10) as response:  # noqa: S310
         body = response.read().decode("utf-8")
     assert "SHAWZIFY" in body
-    # Either the built app (token injected) or the "not built yet" page.
-    assert web_server.token in body or "not been built" in body
+    assert web_server.token not in body
 
 
 def test_events_stream_opens(web_server):

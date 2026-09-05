@@ -41,7 +41,9 @@ describe('web transport health', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     FakeEventSource.instances = [];
-    window.__SHAWZIFY_WEB__ = { token: 'test-token' };
+    window.__SHAWZIFY_WEB__ = { server: 'shawzify' };
+    // The token comes from the page's own URL, as it does in the browser.
+    window.history.replaceState({}, '', '/?token=test-token');
     globalThis.EventSource = FakeEventSource as unknown as typeof EventSource;
   });
 
@@ -49,6 +51,7 @@ describe('web transport health', () => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
     delete window.__SHAWZIFY_WEB__;
+    window.history.replaceState({}, '', '/');
   });
 
   it('backs off instead of reconnecting on a fixed interval', async () => {
@@ -112,6 +115,21 @@ describe('web transport health', () => {
     expect(states.at(-1)).toBe('connected');
     expect(FakeEventSource.instances).toHaveLength(2);
     expect(latestStream().closed).toBe(false);
+  });
+
+  it('takes its token from the page URL, not from the page itself', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ result: {} }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { ipc } = await freshIpc();
+    await ipc.engine.environment();
+
+    expect(fetchMock.mock.calls[0][0]).toContain('token=test-token');
+    expect(window.__SHAWZIFY_WEB__).not.toHaveProperty('token');
   });
 
   it('reports a stopped server as such, not as a network error', async () => {
