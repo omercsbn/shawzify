@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 
-import { onFileDrop } from '@/lib/ipc';
+import { onFileDrop, reconnect } from '@/lib/ipc';
 import { useStore } from '@/state/store';
 import { Home } from '@/components/Home';
 import { Onboarding } from '@/components/Onboarding';
@@ -48,6 +48,39 @@ function TopBar() {
       >
         Settings
       </button>
+    </div>
+  );
+}
+
+/**
+ * The browser transport's server is a separate process the user started, so it
+ * can disappear without the page knowing. Say so, rather than letting every
+ * action fail with a network error.
+ */
+function ConnectionBanner() {
+  const { transport, connection } = useStore();
+  if (transport !== 'web' || connection === 'connected') return null;
+
+  const stale = connection === 'stale';
+  const message = stale
+    ? 'This page is from an earlier run of the server. Open the link the current one printed.'
+    : connection === 'reconnecting'
+      ? 'Lost the connection to the SHAWZIFY server. Reconnecting...'
+      : 'The SHAWZIFY server is not running. Start it again with: scripts\\dev.ps1 -Cli web';
+
+  return (
+    <div className="shrink-0 flex items-center gap-3 px-4 py-2 border-b border-red-500/25 bg-red-500/10">
+      <span
+        className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+          connection === 'reconnecting' ? 'bg-amber animate-pulse' : 'bg-red-400'
+        }`}
+      />
+      <p className="flex-1 text-xs text-red-100">{message}</p>
+      {!stale && (
+        <button type="button" className="btn-quiet h-6 px-2 text-2xs" onClick={() => reconnect()}>
+          Retry now
+        </button>
+      )}
     </div>
   );
 }
@@ -144,6 +177,7 @@ export default function App() {
   return (
     <div className="h-full flex flex-col bg-ink-900">
       <TopBar />
+      <ConnectionBanner />
       <main className="flex-1 min-h-0 relative">
         {view === 'settings' ? (
           <Settings />

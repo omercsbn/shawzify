@@ -137,10 +137,23 @@ at your own copy of the file.
 
 ## The browser interface
 
-### "This page is no longer authorised"
+### "Lost the connection to the SHAWZIFY server"
 
-The token changes every time the server restarts. Reload from the URL the
-current `shawzify web` printed.
+The server is a separate process, so closing its terminal or pressing Ctrl+C
+there leaves the page with nothing to talk to. A red bar appears at the top of
+the interface saying so, and the page retries on its own with a widening delay
+(1 s, 2 s, 4 s ... up to 30 s). Start the server again and it reconnects by
+itself, or press **Retry now** rather than waiting:
+
+```powershell
+scripts\dev.ps1 -Cli web
+```
+
+### "This page is from an earlier run of the server"
+
+The token changes every time the server restarts, so a page left open from a
+previous run is permanently unauthorised — retrying cannot fix it, and the page
+stops trying. Open the link the current `shawzify web` printed.
 
 ### The page is blank
 
