@@ -214,7 +214,7 @@ function Timing({ keymap, onSave }: { keymap: KeymapDto; onSave: (k: KeymapDto['
 }
 
 function EnvironmentPanel({ environment }: { environment: EnvironmentDto | null }) {
-  const { toast } = useStore();
+  const { toast, transport } = useStore();
   const [busy, setBusy] = useState(false);
 
   const rows: { label: string; value: string; ok: boolean }[] = environment
@@ -307,13 +307,21 @@ function EnvironmentPanel({ environment }: { environment: EnvironmentDto | null 
           onClick={async () => {
             try {
               const d = (await engine.diagnostics()) as { logDir?: string };
-              if (d.logDir) await system.reveal(d.logDir);
+              if (!d.logDir) return;
+              // A browser tab cannot open a folder, so give the reader the
+              // path instead of failing at them.
+              if (transport === 'web') {
+                await system.copy(d.logDir);
+                toast('success', 'Log folder path copied', d.logDir);
+                return;
+              }
+              await system.reveal(d.logDir);
             } catch (err) {
               toast('error', (err as ShawzifyError).message);
             }
           }}
         >
-          Open Logs
+          {transport === 'web' ? 'Copy Log Path' : 'Open Logs'}
         </button>
       </div>
     </Panel>
