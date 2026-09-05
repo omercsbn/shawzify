@@ -30,6 +30,48 @@ Three languages, each doing what it is actually good at:
 * **TypeScript** draws. It holds no musical logic; it renders what the engine
   reports and sends option changes back.
 
+## Two shells, one app
+
+The React app runs unchanged in both:
+
+```
+  Tauri window                     Browser tab
+       |                                |
+   Tauri IPC                    HTTP + server-sent events
+       |                                |
+    Rust shell  --stdio-->  Python engine  <--in-process--  web server
+```
+
+`lib/ipc.ts` picks the transport at runtime by looking for `__TAURI_INTERNALS__`
+or the token the web server injects into the page. Components never know which
+one they are on. Two features are desktop-only and say so rather than failing:
+live Warframe playback (Windows key injection, window focus) and native file
+dialogs (a browser cannot hand over a real path).
+
+The web server is the standard library — a threading HTTP server with SSE for
+progress — so the browser interface adds no dependency. It binds 127.0.0.1,
+refuses any other host at construction time, requires a startup token on every
+request, rejects cross-origin requests, and only serves media from inside
+SHAWZIFY's own cache.
+
+## Where music comes from
+
+`sources/` is a provider interface with three implementations, all of which end
+at the same place: a local audio file the normal pipeline decodes.
+
+* **Local** — the primary input, always available.
+* **YouTube** — optional (`yt-dlp`), downloads the best audio stream without
+  re-encoding, caches by video id.
+* **Spotify** — metadata only. Spotify does not permit audio downloads, and
+  since November 2024 its `audio-features` and `audio-analysis` endpoints are
+  closed to new apps. What it *is* good for is knowing exactly what a track is,
+  so a Spotify link becomes: identify on Spotify, find the recording on YouTube,
+  verify by duration.
+
+That verification is the interesting part — a search returns the studio version
+next to covers, live versions and hour-long loops. See
+`docs/research/music-sources.md` for the scoring.
+
 ## Why a stdio sidecar rather than a local HTTP server
 
 A localhost server needs a port, a bind address, and an authentication story,
@@ -91,6 +133,22 @@ actually depends on, so changing the arrangement mode never invalidates stems.
 ## The arrangement engine
 
 `engine/shawzify_engine/arrangement/` is the part worth reading.
+
+### 0. Structure (`music/structure.py`)
+
+A self-similarity matrix over chroma *plus* register, density and energy
+contours. Chroma alone cannot separate a verse from a chorus in a song that
+stays in one key -- every frame looks alike and the track collapses into one
+section. What actually distinguishes them is that a chorus sits higher, moves
+faster and hits harder.
+
+Checkerboard-kernel novelty finds the boundaries; the resulting segments are
+clustered by similarity, so repeats share a label. Recognisability is then
+mostly repetition -- the part of a song that comes back is the part people
+remember -- plus energy, density and a mild preference for the middle.
+
+It feeds two things: the Hook focus mode, and an importance multiplier so
+density reduction sacrifices an intro before it touches a chorus.
 
 ### 1. Importance (`music/importance.py`)
 
@@ -171,6 +229,19 @@ result against the instrument model before anything is emitted.
 
 Every arranged note is verified playable in the tests, for every fixture and
 every mode.
+
+## Choosing an instrument
+
+`shawzin/recommend.py` ranks the eleven variants for the arrangement in hand.
+Polyphony and sustain dominate, because they change what is playable and what it
+sounds like; a smaller character term separates variants that are otherwise
+identical on those axes.
+
+The sustain term is worth noting: every Shawzin rings for at least two seconds,
+so comparing note length against the note gap in absolute terms rates them all
+the same. The score is distance from an *ideal* length for this music -- about
+four notes' worth of ring -- which is what makes a 28-second Lizzie rank below a
+2-second Dax on fast material and above it on very slow material.
 
 ## Determinism
 
