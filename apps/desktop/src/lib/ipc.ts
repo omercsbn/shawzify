@@ -42,9 +42,16 @@ interface TauriBridge {
 
 let bridge: TauriBridge | null = null;
 
-/** Injected into index.html by the local web server, with its access token. */
+/**
+ * Injected into index.html by the local web server to identify the transport.
+ *
+ * It carries no token: the document is served without authorisation, so a
+ * secret placed in it would be readable by anything on the machine. The page's
+ * own URL carries the token instead.
+ */
 interface WebRuntime {
-  token: string;
+  server: string;
+  version?: string;
 }
 
 declare global {
@@ -60,7 +67,7 @@ export function isTauri(): boolean {
 }
 
 export function isWeb(): boolean {
-  return typeof window !== 'undefined' && Boolean(window.__SHAWZIFY_WEB__?.token);
+  return typeof window !== 'undefined' && Boolean(window.__SHAWZIFY_WEB__);
 }
 
 /**
@@ -76,7 +83,13 @@ export function transport(): Transport {
   return 'none';
 }
 
-const webToken = (): string => window.__SHAWZIFY_WEB__?.token ?? '';
+const webToken = (): string => {
+  try {
+    return new URLSearchParams(window.location.search).get('token') ?? '';
+  } catch {
+    return '';
+  }
+};
 
 // -- web transport health -------------------------------------------------
 

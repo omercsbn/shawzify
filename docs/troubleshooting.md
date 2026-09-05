@@ -171,6 +171,14 @@ detection that a browser tab cannot do. Everything else works in both.
 No. The server binds 127.0.0.1 and refuses any other host. Exposing a local
 music library and file paths to a network is not something to make configurable.
 
+### How much does the token actually protect?
+
+It is what stops other sites in your browser, and other programs on the machine,
+from driving the engine — which can read files, run FFmpeg and download from
+YouTube. It lives only in the URL the CLI printed and in the page's address bar;
+it is not written to disk, and never appears in the page's own HTML. Treat the
+link as the key it is, and use a fresh one after every restart.
+
 ## GPU
 
 ### CUDA is not detected

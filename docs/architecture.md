@@ -51,8 +51,14 @@ dialogs (a browser cannot hand over a real path).
 The web server is the standard library — a threading HTTP server with SSE for
 progress — so the browser interface adds no dependency. It binds 127.0.0.1,
 refuses any other host at construction time, requires a startup token on every
-request, rejects cross-origin requests, and only serves media from inside
+API request, rejects cross-origin requests, and only serves media from inside
 SHAWZIFY's own cache.
+
+The page itself is *not* authorised, and cannot be: a browser fetches
+`index.html` and its assets with no way to attach a token. So the document must
+carry no secret — the page reads its token from its own URL, the one the CLI
+printed. Injecting it into the HTML instead would hand it to anything on the
+machine that can make an HTTP request.
 
 The browser transport also has a failure the desktop one does not: its server
 can be stopped while a page stays open. `EventSource` would then retry the dead
