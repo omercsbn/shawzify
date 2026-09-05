@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from functools import lru_cache
 from typing import Any
 
 from ..music.events import NoteEvent, group_by_onset, sort_events
@@ -56,6 +57,11 @@ class ScaleCandidate:
         }
 
 
+#: The table covers well past MIDI range so an extreme transposition still hits it.
+_TABLE_LOW = -48
+_TABLE_HIGH = 176
+
+
 def _nearest_playable(pitch: int, playable: Sequence[int], pcs: frozenset[int]) -> tuple[int, int, bool]:
     """Nearest playable pitch, its distance, and whether the pitch class matched.
 
@@ -79,6 +85,21 @@ def _nearest_playable(pitch: int, playable: Sequence[int], pcs: frozenset[int]) 
     return best, best_dist, exact_pc
 
 
+@lru_cache(maxsize=64)
+def _nearest_table(
+    playable: tuple[int, ...], pcs: frozenset[int]
+) -> tuple[tuple[int, int, bool], ...]:
+    """Precomputed :func:`_nearest_playable` for every pitch, per scale.
+
+    The search is over nine scales and twenty-five transpositions, so a
+    two-thousand-note piece would otherwise call the inner scan half a million
+    times. One 224-entry table per scale turns that into an index.
+    """
+    return tuple(
+        _nearest_playable(p, playable, pcs) for p in range(_TABLE_LOW, _TABLE_HIGH)
+    )
+
+
 def evaluate_candidate(
     events: Sequence[NoteEvent],
     scale: ShawzinScale,
@@ -87,8 +108,14 @@ def evaluate_candidate(
     importance: Sequence[float] | None = None,
     key: KeyEstimate | None = None,
     weights: dict[str, float] | None = None,
+    top_indices: Sequence[int] | None = None,
 ) -> ScaleCandidate:
-    """Score one (scale, transpose) pair. Higher is better; 0..1."""
+    """Score one (scale, transpose) pair. Higher is better; 0..1.
+
+    ``top_indices`` is the index of the top note of each simultaneity group.
+    It depends only on ``events``, so the caller computes it once for the whole
+    search rather than per candidate.
+    """
     if not events:
         return ScaleCandidate(scale.id, scale.name, transpose, 0.0, 0, 0, 0, 0, 0, 0.0, 0)
 
@@ -116,9 +143,13 @@ def evaluate_candidate(
     folds = 0
     mapped: list[int] = []
 
+    table = _nearest_table(playable, pcs)
     for i, ev in enumerate(events):
         p = ev.pitch_midi + transpose
-        target, dist, pc_ok = _nearest_playable(p, playable, pcs)
+        if _TABLE_LOW <= p < _TABLE_HIGH:
+            target, dist, pc_ok = table[p - _TABLE_LOW]
+        else:
+            target, dist, pc_ok = _nearest_playable(p, playable, pcs)
         mapped.append(target)
         if lo <= p <= hi:
             in_range += 1
@@ -138,14 +169,11 @@ def evaluate_candidate(
     range_fit = in_range / n
 
     # Contour: does the mapped line move the same direction as the source?
-    groups = group_by_onset(events, 0.03)
-    tops = [max(g, key=lambda e: e.pitch_midi) for g in groups]
-    index_of = {id(e): i for i, e in enumerate(events)}
+    tops = list(top_indices) if top_indices is not None else melody_indices(events)
     contour_hits = 0
     contour_total = 0
-    for a, b in zip(tops, tops[1:]):
-        ia, ib = index_of[id(a)], index_of[id(b)]
-        src = b.pitch_midi - a.pitch_midi
+    for ia, ib in zip(tops, tops[1:]):
+        src = events[ib].pitch_midi - events[ia].pitch_midi
         out = mapped[ib] - mapped[ia]
         contour_total += 1
         if src == 0:
@@ -197,6 +225,15 @@ def evaluate_candidate(
         mean_pitch_error=mean_error,
         octave_folds=folds,
     )
+
+
+def melody_indices(events: Sequence[NoteEvent], tolerance: float = 0.03) -> list[int]:
+    """Index of the top note in each simultaneity group -- the melody line."""
+    index_of = {id(e): i for i, e in enumerate(events)}
+    return [
+        index_of[id(max(g, key=lambda e: e.pitch_midi))]
+        for g in group_by_onset(events, tolerance)
+    ]
 
 
 def find_best_shawzin_mapping(
@@ -255,12 +292,16 @@ def find_best_shawzin_mapping(
     total = sum(weights.values())
     weights = {k: v / total for k, v in weights.items()}
 
+    # Group structure depends only on the events, so compute it once.
+    tops = melody_indices(ordered)
+
     results: list[ScaleCandidate] = []
     for scale in scales:
         for t in transposes:
             results.append(
                 evaluate_candidate(
-                    ordered, scale, t, importance=imp_values, key=key, weights=weights
+                    ordered, scale, t,
+                    importance=imp_values, key=key, weights=weights, top_indices=tops,
                 )
             )
     # Deterministic tie-break so identical inputs always yield identical output.

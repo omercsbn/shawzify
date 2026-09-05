@@ -523,6 +523,10 @@ def _build_song_events(
     out: list[ShawzinEvent] = []
     occupied: dict[int, str] = {}  # tick -> fret state already claimed
     last_pluck: dict[str, int] = {}  # string -> last tick used
+    # Indexed by target tick so the string-conflict and merge checks stay O(1)
+    # rather than scanning everything emitted so far.
+    by_target: dict[int, list[ShawzinEvent]] = {}
+    index_in_out: dict[int, int] = {}
 
     for tick in sorted(by_tick):
         for fret, strings, sources in by_tick[tick]:
@@ -542,12 +546,13 @@ def _build_song_events(
                     )
                 continue
 
+            at_target = by_target.get(target, [])
             usable = ""
             for ch in strings:
                 prev = last_pluck.get(ch)
                 if prev is not None and target - prev < min_repeat_ticks:
                     continue
-                if any(e.tick == target and ch in e.string for e in out):
+                if any(ch in e.string for e in at_target):
                     continue
                 usable += ch
             if not usable:
@@ -559,14 +564,20 @@ def _build_song_events(
                 continue
 
             merged = False
-            for k, existing in enumerate(out):
-                if existing.tick == target and existing.fret == fret:
+            for k, existing in enumerate(at_target):
+                if existing.fret == fret:
                     combined = "".join(sorted(set(existing.string + usable)))
-                    out[k] = ShawzinEvent(target, fret, combined)
+                    replacement = ShawzinEvent(target, fret, combined)
+                    out[index_in_out[id(existing)]] = replacement
+                    at_target[k] = replacement
+                    index_in_out[id(replacement)] = index_in_out.pop(id(existing))
                     merged = True
                     break
             if not merged:
-                out.append(ShawzinEvent(target, fret, usable))
+                event = ShawzinEvent(target, fret, usable)
+                index_in_out[id(event)] = len(out)
+                out.append(event)
+                by_target.setdefault(target, []).append(event)
             occupied[target] = fret
             for ch in usable:
                 last_pluck[ch] = target
