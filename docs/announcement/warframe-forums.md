@@ -23,12 +23,21 @@ codes SHAWZIFY produced and a link back — those threads are where people who
 already care about this are reading, and arriving with codes rather than a
 pitch is the difference between a tool post and an advert.
 
+## Tags
+
+The tag field is not free text — it offers a fixed list: SPOILERS, Playstation,
+Xbox, Nintendo Switch, Community, PS5, PS4, XBSX, XB1, Mobile, iOS, Conclave.
+
+Use **Community** and nothing else. Every other option is a platform tag, and
+SHAWZIFY is a Windows program: tagging it PS5 would pull in players who cannot
+run it. There is no PC tag, which is exactly why the title says Windows.
+
 ## Titles
 
 Pick one. The first is the recommendation: it says what the thing does in the
 words a Shawzin player already uses, and "any song" is the actual claim.
 
-1. **SHAWZIFY — turn any song into a Shawzin performance (free, open source)**
+1. **SHAWZIFY — turn any song into a Shawzin performance (Windows, free, open source)**
 2. SHAWZIFY — drop in an MP3, get a Shawzin song code
 3. I built a tool that arranges real music for the Shawzin, not just converts MIDI
 
@@ -54,7 +63,7 @@ your own announcement thread.
 
 # The post
 
-**Title:** SHAWZIFY — turn any song into a Shawzin performance (free, open source)
+**Title:** SHAWZIFY — turn any song into a Shawzin performance (Windows, free, open source)
 
 ---
 
@@ -69,6 +78,9 @@ So I spent a while building the other half: **SHAWZIFY takes a song and decides
 what should survive.**
 
 ![The SHAWZIFY workspace](workspace.png)
+
+**Windows, free, MIT licensed** — and there is a browser demo further down if
+you would rather look before installing anything.
 
 Drop in an MP3, a WAV, a MIDI file, or paste a YouTube link. It separates the
 stems, transcribes the notes, works out the key and the tempo, finds where the
