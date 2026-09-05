@@ -86,7 +86,9 @@ instrument's range`.
 WAV, an analysis JSON, and a `.shawzify` project you can reopen.
 
 **Two interfaces** — a desktop app, and `shawzify web` for the same thing in a
-browser, bound to localhost.
+browser, bound to localhost. The browser one is not a cut-down view: drop a
+file on it, paste a link, and download every export. Only live Warframe
+playback is desktop-only, because a tab cannot send keystrokes to a game.
 
 **Live play** — SHAWZIFY types the performance into Warframe using ordinary
 Windows keyboard input, the same way a macro pad or an external MIDI keyboard
