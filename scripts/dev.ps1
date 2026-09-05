@@ -11,7 +11,9 @@
 .EXAMPLE
     scripts/dev.ps1 -Cli convert assets/demo/demo.mid --tab
 #>
-[CmdletBinding()]
+# PositionalBinding is off so that '-Cli convert song.mp3' passes 'convert' and
+# 'song.mp3' straight through instead of binding the first one to -Open.
+[CmdletBinding(PositionalBinding = $false)]
 param(
     [string]$Open,        # a file to open on launch
     [switch]$Cli,         # run the CLI instead of the desktop app

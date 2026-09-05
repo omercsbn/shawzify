@@ -182,6 +182,18 @@ describe('Waveform', () => {
     expect(onSeek).toHaveBeenCalledWith(10);
   });
 
+  it('draws note activity when there is no audio waveform (MIDI input)', () => {
+    const { container } = render(
+      <Waveform
+        waveform={null}
+        duration={30}
+        playhead={0}
+        events={sourceFixture.events!}
+      />,
+    );
+    expect(container.querySelector('canvas')).toBeTruthy();
+  });
+
   it('shows the playhead and total time', () => {
     render(
       <Waveform waveform={sourceFixture.waveform!} duration={222} playhead={65} />,

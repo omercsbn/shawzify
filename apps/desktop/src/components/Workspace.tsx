@@ -209,6 +209,7 @@ export function Workspace() {
                 duration={duration}
                 playhead={playhead}
                 phrases={arrangement?.phrases}
+                events={sourceEvents}
                 onSeek={preview.seek}
               />
             </div>
