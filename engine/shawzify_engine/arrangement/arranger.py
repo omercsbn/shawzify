@@ -28,6 +28,7 @@ from ..music.importance import ImportanceWeights, compute_importance
 from ..music.key import KeyEstimate, estimate_key
 from ..music.phrases import Phrase, detect_phrases
 from ..music.quantize import choose_grid, quantize_events
+from ..music.structure import SongStructure, analyze_structure, best_window, recognizability_weights
 from ..shawzin.instrument import ShawzinInstrument, ShawzinScale, default_instrument
 from ..shawzin.songcode import ShawzinEvent, ShawzinSong, encode, validate_events
 from ..version import ARRANGEMENT_ENGINE_VERSION, version_dict
@@ -35,7 +36,7 @@ from .arpeggio import plan_arpeggio, should_arpeggiate
 from .decisions import ArrangementDecision, Operation, describe_operations
 from .density import measure_density, reduce_density, suggest_density
 from .mapping import Candidate, MappingCosts, map_melody, map_single
-from .options import AUTO, ArrangementOptions, ResolvedOptions
+from .options import AUTO, ArrangementOptions, Focus, ResolvedOptions
 from .polyphony import best_chord_position, reduce_group
 from .report import (
     ConversionReport,
@@ -59,6 +60,7 @@ class Arrangement:
     source_events: list[NoteEvent] = field(default_factory=list)
     phrases: list[Phrase] = field(default_factory=list)
     scale_candidates: list[ScaleCandidate] = field(default_factory=list)
+    structure: SongStructure | None = None
 
     @property
     def scale(self) -> ShawzinScale:
@@ -114,6 +116,7 @@ class Arrangement:
             "report": self.report.to_dict(),
             "scaleCandidates": [c.to_dict() for c in self.scale_candidates],
             "phrases": [p.to_dict() for p in self.phrases],
+            "structure": self.structure.to_dict() if self.structure else None,
             "engineVersion": ARRANGEMENT_ENGINE_VERSION,
         }
         if include_decisions:
@@ -163,16 +166,23 @@ def arrange_for_shawzin(
     bpm_confidence: float = 0.0,
     key: KeyEstimate | None = None,
     importance_weights: ImportanceWeights | None = None,
+    structure: SongStructure | None = None,
     progress: Any = None,
 ) -> Arrangement:
-    """Turn source note events into a playable Shawzin arrangement."""
+    """Turn source note events into a playable Shawzin arrangement.
+
+    ``structure`` is optional; when absent and ``options.use_structure`` is on,
+    it is derived from the events. It feeds two things: an importance boost for
+    notes in recognisable sections, and the Hook focus mode.
+    """
     opts = options or ArrangementOptions()
     inst = instrument or default_instrument()
     if inst.variant.id != opts.shawzin_variant:
         inst = inst.with_variant(opts.shawzin_variant)
     profile = opts.profile
 
-    source = sort_events(events)
+    incoming = sort_events(events)
+    source = incoming
     if not source:
         resolved = ResolvedOptions(
             mode=opts.mode.value, scale_id="pmin", scale_name="Pentatonic Minor",
@@ -181,12 +191,48 @@ def arrange_for_shawzin(
         )
         return Arrangement(ShawzinSong("pmin", []), inst, opts, resolved)
 
+    # -- 0. structure, and the focus window it enables -------------------
+    if structure is None and opts.use_structure:
+        structure = analyze_structure(source, bpm=bpm)
+
+    focus = Focus.FULL if isinstance(opts.focus, type(AUTO)) else opts.focus
+    focus_window: tuple[float, float] | None = None
+    focus_warning: str | None = None
+    if focus is Focus.HOOK and structure is not None:
+        total = max(e.end_seconds for e in source)
+        limit = inst.format.max_song_seconds
+        window = best_window(structure, window_seconds=limit, total_seconds=total)
+        if window[1] - window[0] < total - 0.5:
+            start, end = window
+            trimmed = [
+                e.moved(-start) for e in source if start <= e.start_seconds < end
+            ]
+            if trimmed:
+                source = sort_events(trimmed)
+                focus_window = window
+                segment = structure.segment_at(start + (end - start) / 2)
+                focus_warning = (
+                    "Focused on the most recognisable "
+                    + str(int(end - start))
+                    + " seconds (from "
+                    + _clock(start)
+                    + " to "
+                    + _clock(end)
+                    + (", around the " + segment.role if segment else "")
+                    + "). Switch focus to Full Song to arrange all of it."
+                )
+
     # -- 1. analysis ----------------------------------------------------
     if key is None:
         key = estimate_key(source)
     phrases = detect_phrases(source, bpm=bpm)
     factors = compute_importance(source, bpm=bpm, weights=importance_weights, phrases=phrases)
     importance = [f.total for f in factors]
+    if structure is not None and opts.use_structure and focus_window is None:
+        # Notes in a repeated, high-energy section are the ones a listener would
+        # recognise, so they should be the last to be thinned out.
+        weights = recognizability_weights(source, structure)
+        importance = [i * w for i, w in zip(importance, weights)]
     if progress:
         progress(0.15, "Scoring note importance")
 
@@ -443,6 +489,8 @@ def arrange_for_shawzin(
         output_groups=output_groups,
     )
     warnings = build_warnings(metrics)
+    if focus_warning:
+        warnings.insert(0, focus_warning)
     if grid == "off" and isinstance(opts.quantization, type(AUTO)):
         warnings.append("Quantization was left off: the timing did not fit a regular grid.")
     if song.note_count > inst.format.chat_link_max_notes:
@@ -481,6 +529,8 @@ def arrange_for_shawzin(
         max_density=budget,
         arpeggiate_chords=arpeggiate,
         lead_in_ticks=lead_in,
+        focus=focus.value,
+        focus_window=focus_window,
         detail={
             "observedDensity": round(observed_density, 2),
             "peakDensityAfter": round(density.peak_density, 2),
@@ -500,7 +550,13 @@ def arrange_for_shawzin(
         source_events=list(source),
         phrases=phrases,
         scale_candidates=candidates,
+        structure=structure,
     )
+
+
+def _clock(seconds: float) -> str:
+    minutes, secs = divmod(int(round(seconds)), 60)
+    return str(minutes) + ":" + str(secs).zfill(2)
 
 
 def _build_song_events(

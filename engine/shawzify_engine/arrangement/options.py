@@ -112,6 +112,16 @@ MODE_PROFILES: dict[ArrangementMode, ModeProfile] = {
 QuantizeSetting = Literal["off", "1/4", "1/8", "1/8t", "1/16", "1/16t", "1/32"] | Auto
 
 
+class Focus(str, Enum):
+    """Which part of the song to arrange."""
+
+    FULL = "full"
+    #: Only the stretch that carries the most recognition -- the chorus, usually.
+    #: The way to fit a five-minute song into one importable code without
+    #: losing the part people would actually recognise.
+    HOOK = "hook"
+
+
 @dataclass(frozen=True)
 class ArrangementOptions:
     """Everything the arranger needs beyond the notes themselves."""
@@ -127,6 +137,12 @@ class ArrangementOptions:
     max_density: float | Auto = AUTO          # notes per second
     shawzin_variant: str = "dax"
     stem_source: StemSource = StemSource.AUTO
+    #: Whole song, or just the hook. AUTO keeps the whole song and lets
+    #: splitting handle an over-long one, so nothing is ever dropped silently.
+    focus: Focus | Auto = AUTO
+    #: Weight notes by how recognisable their section is, so density reduction
+    #: sacrifices an intro before it touches the chorus.
+    use_structure: bool = True
     #: Cap on how far AUTO may transpose, in semitones.
     transpose_search: int = 12
     #: Minimum ticks between two plucks of the same string (1 tick = 1/16 s).
@@ -179,6 +195,12 @@ class ArrangementOptions:
             max_density=dec_auto(d.get("max_density", d.get("maxDensity", "auto")), float),
             shawzin_variant=str(d.get("shawzin_variant", d.get("shawzinVariant", defaults.shawzin_variant))),
             stem_source=StemSource(d.get("stem_source", d.get("stemSource", defaults.stem_source.value))),
+            focus=(
+                AUTO
+                if d.get("focus", "auto") in (None, "auto")
+                else Focus(d.get("focus"))
+            ),
+            use_structure=bool(d.get("use_structure", d.get("useStructure", True))),
             transpose_search=int(d.get("transpose_search", d.get("transposeSearch", defaults.transpose_search))),
             min_repeat_ticks=int(d.get("min_repeat_ticks", d.get("minRepeatTicks", defaults.min_repeat_ticks))),
             lead_in_ticks=dec_auto(d.get("lead_in_ticks", d.get("leadInTicks", "auto")), int),
@@ -199,6 +221,9 @@ class ResolvedOptions:
     max_density: float
     arpeggiate_chords: bool
     lead_in_ticks: int
+    focus: str = "full"
+    #: Set when focus trimmed the song: (start, end) in source seconds.
+    focus_window: tuple[float, float] | None = None
     detail: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -212,5 +237,7 @@ class ResolvedOptions:
             "maxDensity": round(self.max_density, 3),
             "arpeggiateChords": self.arpeggiate_chords,
             "leadInTicks": self.lead_in_ticks,
+            "focus": self.focus,
+            "focusWindow": list(self.focus_window) if self.focus_window else None,
             "detail": self.detail,
         }
