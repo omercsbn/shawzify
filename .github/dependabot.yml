@@ -17,11 +17,14 @@ updates:
     directory: /apps/desktop
     schedule:
       interval: monthly
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 3
     groups:
       frontend:
         patterns: ['*']
         update-types: [minor, patch]
+      frontend-major:
+        patterns: ['*']
+        update-types: [major]
     commit-message:
       prefix: 'deps'
 
@@ -43,6 +46,9 @@ updates:
       rust:
         patterns: ['*']
         update-types: [minor, patch]
+      rust-major:
+        patterns: ['*']
+        update-types: [major]
     commit-message:
       prefix: 'deps'
 
@@ -54,5 +60,8 @@ updates:
       python:
         patterns: ['*']
         update-types: [minor, patch]
+      python-major:
+        patterns: ['*']
+        update-types: [major]
     commit-message:
       prefix: 'deps'
