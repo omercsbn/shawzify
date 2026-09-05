@@ -214,6 +214,28 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
         query = parse_qs(parsed.query)
+
+        # Read the body before answering anything -- refusals included. The
+        # connection is kept alive, so a body left unread is parsed as the next
+        # request line: one rejected call would turn every later call on that
+        # connection into 501 Unsupported method.
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            length = -1
+        if length < 0:
+            self.close_connection = True
+            self._send_json(HTTPStatus.BAD_REQUEST, {"error": {"message": "Malformed request."}})
+            return
+        if length > _MAX_BODY_BYTES:
+            # Draining megabytes to stay polite is worse than hanging up.
+            self.close_connection = True
+            self._send_json(
+                HTTPStatus.REQUEST_ENTITY_TOO_LARGE, {"error": {"message": "Request too large."}}
+            )
+            return
+        raw = self.rfile.read(length) if length else b""
+
         if not parsed.path.startswith("/api/"):
             self._send_json(HTTPStatus.NOT_FOUND, {"error": {"message": "No such endpoint."}})
             return
@@ -221,14 +243,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.FORBIDDEN, {"error": {"message": "Not authorised."}})
             return
 
-        length = int(self.headers.get("Content-Length") or 0)
-        if length > _MAX_BODY_BYTES:
-            self._send_json(
-                HTTPStatus.REQUEST_ENTITY_TOO_LARGE, {"error": {"message": "Request too large."}}
-            )
-            return
         try:
-            body = json.loads(self.rfile.read(length) or b"{}")
+            body = json.loads(raw or b"{}")
         except json.JSONDecodeError:
             self._send_json(HTTPStatus.BAD_REQUEST, {"error": {"message": "Malformed request."}})
             return
@@ -380,6 +396,42 @@ then reload this page. The API at <code>/api/</code> works either way.</p>
 """
 
 
+def token_path() -> Path:
+    """Where the reusable access token lives (a per-user directory)."""
+    from ..common.paths import app_dir
+
+    return Path(app_dir()) / "web-token"
+
+
+def stored_token(*, rotate: bool = False) -> str:
+    """The token to serve with, reused across restarts unless rotated.
+
+    A fresh token every run means every page left open dies with the server,
+    which in practice means hunting for a new link after each restart. The
+    token is already in the URL -- the address bar, the shell history -- so
+    keeping a copy in the user's own app directory does not widen who can read
+    it, and it lets an open tab reconnect on its own.
+    """
+    path = token_path()
+    if not rotate:
+        try:
+            existing = path.read_text(encoding="utf-8").strip()
+        except OSError:
+            existing = ""
+        if len(existing) >= 16 and existing.isascii() and existing.isprintable():
+            return existing
+
+    token = secrets.token_urlsafe(24)
+    try:
+        path.write_text(token, encoding="utf-8")
+        os.chmod(path, 0o600)
+    except OSError:
+        # An unwritable app directory is not worth refusing to start over;
+        # the token simply lasts for this run.
+        pass
+    return token
+
+
 class WebServer:
     """A running local server. Use as a context manager or call ``stop()``."""
 
@@ -390,6 +442,7 @@ class WebServer:
         port: int = 8733,
         token: str | None = None,
         frontend: Path | None = None,
+        rotate_token: bool = False,
     ) -> None:
         if host not in ("127.0.0.1", "localhost", "::1"):
             # Not a configuration mistake to tolerate: binding elsewhere would
@@ -399,7 +452,7 @@ class WebServer:
                 technical="refused host: " + repr(host),
             )
         self.app = WebApp(
-            token=token or secrets.token_urlsafe(24),
+            token=token or stored_token(rotate=rotate_token),
             frontend=frontend if frontend is not None else find_frontend(),
         )
         handler = type("BoundHandler", (Handler,), {"app": self.app})
@@ -442,9 +495,10 @@ def serve(
     port: int = 8733,
     open_browser: bool = True,
     frontend: Path | None = None,
+    rotate_token: bool = False,
 ) -> int:
     """Run the web interface until interrupted."""
-    server = WebServer(port=port, frontend=frontend).start()
+    server = WebServer(port=port, frontend=frontend, rotate_token=rotate_token).start()
     print()
     print("  SHAWZIFY " + APP_VERSION + " - web interface")
     print()
@@ -456,6 +510,7 @@ def serve(
         print()
     print("    Bound to 127.0.0.1 only. Every API request needs the token in")
     print("    that link, so keep it to yourself -- it is the whole key.")
+    print("    The link keeps working across restarts; --new-token replaces it.")
     print("    Press Ctrl+C to stop.")
     print()
     if open_browser:

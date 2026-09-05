@@ -8,6 +8,7 @@ live requests -- a test suite that needs YouTube to be up is not a test suite.
 
 from __future__ import annotations
 
+import http.client
 import json
 import threading
 import urllib.error
@@ -574,6 +575,86 @@ def test_cross_origin_requests_are_refused(web_server):
             raise AssertionError("a cross-origin request was accepted")
     except urllib.error.HTTPError as exc:
         assert exc.code == 403
+
+
+def test_the_token_survives_a_restart(tmp_path, monkeypatch):
+    """An open page must not die every time the server is restarted."""
+    from shawzify_engine.web import server as web
+
+    monkeypatch.setattr(web, "token_path", lambda: tmp_path / "web-token")
+
+    first = web.stored_token()
+    assert len(first) >= 16
+    assert web.stored_token() == first
+
+
+def test_rotating_the_token_replaces_it(tmp_path, monkeypatch):
+    from shawzify_engine.web import server as web
+
+    monkeypatch.setattr(web, "token_path", lambda: tmp_path / "web-token")
+
+    first = web.stored_token()
+    second = web.stored_token(rotate=True)
+    assert second != first
+    assert web.stored_token() == second
+
+
+def test_a_corrupt_token_file_is_replaced(tmp_path, monkeypatch):
+    from shawzify_engine.web import server as web
+
+    path = tmp_path / "web-token"
+    path.write_text("short", encoding="utf-8")
+    monkeypatch.setattr(web, "token_path", lambda: path)
+
+    token = web.stored_token()
+    assert len(token) >= 16
+    assert token != "short"
+
+
+def test_a_refused_call_does_not_poison_the_connection(web_server):
+    """A rejected POST must still consume its body.
+
+    Browsers reuse one connection for every call. When the server answered an
+    unauthorised POST without reading the body, the leftover bytes were parsed
+    as the next request line, and every later call on that connection came back
+    as 501 Unsupported method -- with the previous call's JSON quoted in the
+    error. One stale token broke the whole page, not just its own request.
+    """
+    connection = http.client.HTTPConnection("127.0.0.1", web_server.port, timeout=10)
+    try:
+        origin = "http://127.0.0.1:" + str(web_server.port)
+        payload = json.dumps({"method": "sources", "params": {}})
+        headers = {"Content-Type": "application/json", "Origin": origin}
+
+        connection.request("POST", "/api/rpc?token=wrong", payload, headers)
+        refused = connection.getresponse()
+        refused.read()
+        assert refused.status == 403
+
+        connection.request(
+            "POST", "/api/rpc?token=" + web_server.token, payload, headers
+        )
+        allowed = connection.getresponse()
+        body = json.loads(allowed.read())
+        assert allowed.status == 200, allowed.reason
+        assert "providers" in body["result"]
+    finally:
+        connection.close()
+
+
+def test_an_oversized_body_is_refused_without_reading_it(web_server):
+    connection = http.client.HTTPConnection("127.0.0.1", web_server.port, timeout=10)
+    try:
+        connection.putrequest("POST", "/api/rpc?token=" + web_server.token)
+        connection.putheader("Content-Type", "application/json")
+        connection.putheader("Origin", "http://127.0.0.1:" + str(web_server.port))
+        connection.putheader("Content-Length", str(64 * 1024 * 1024))
+        connection.endheaders()
+        response = connection.getresponse()
+        response.read()
+        assert response.status == 413
+    finally:
+        connection.close()
 
 
 def test_the_page_is_served_without_handing_out_the_token(web_server):

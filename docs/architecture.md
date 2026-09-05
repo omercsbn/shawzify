@@ -60,6 +60,12 @@ carry no secret — the page reads its token from its own URL, the one the CLI
 printed. Injecting it into the HTML instead would hand it to anything on the
 machine that can make an HTTP request.
 
+The token is saved per user and reused, because a fresh one every run kills
+every page left open — and a page whose token died looks exactly like a broken
+app. `--new-token` rotates it. Refusals read their request body before
+answering: on a kept-alive connection an unread body becomes the next request
+line, so one unauthorised call would otherwise break every call after it.
+
 The browser transport also has a failure the desktop one does not: its server
 can be stopped while a page stays open. `EventSource` would then retry the dead
 port every few seconds forever, silently, so `lib/ipc.ts` owns the retry

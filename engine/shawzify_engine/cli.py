@@ -547,7 +547,11 @@ def cmd_web(args: argparse.Namespace) -> int:
     """Run the browser interface, bound to localhost."""
     from .web import serve
 
-    return serve(port=args.port, open_browser=not args.no_browser)
+    return serve(
+        port=args.port,
+        open_browser=not args.no_browser,
+        rotate_token=args.new_token,
+    )
 
 
 def cmd_decode(args: argparse.Namespace) -> int:
@@ -778,6 +782,11 @@ def build_parser() -> argparse.ArgumentParser:
                        help="run the browser interface on localhost")
     w.add_argument("--port", type=int, default=8733)
     w.add_argument("--no-browser", action="store_true")
+    w.add_argument(
+        "--new-token",
+        action="store_true",
+        help="replace the saved access token, invalidating any open page",
+    )
     w.set_defaults(func=cmd_web)
 
     d = sub.add_parser("decode", parents=[common], help="decode a Shawzin song code")
