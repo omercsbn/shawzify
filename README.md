@@ -21,6 +21,8 @@ Drop a song. Play it in Warframe.
 
 ---
 
+![The SHAWZIFY workspace: the waveform of a track, a piano roll of the arrangement coloured by what happened to each note, a compatibility breakdown, and the detected song structure with its hook.](assets/screenshots/workspace.png)
+
 SHAWZIFY converts ordinary music — an MP3, a WAV, a MIDI file — into a
 performance the Warframe Shawzin can actually play, then hands you the song code
 to paste into the game or plays it for you live.
