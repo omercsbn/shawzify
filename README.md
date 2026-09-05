@@ -44,10 +44,16 @@ and records a reason for every change it makes.
 ## Features
 
 **Input** — WAV, MP3, FLAC, M4A, OGG, OPUS, AAC, AIFF, WMA, MIDI, and
-`.shawzify` projects. Microphone and MIDI-keyboard input for live play.
+`.shawzify` projects. Paste a **YouTube** or **Spotify** link and SHAWZIFY
+fetches the track. Microphone and MIDI-keyboard input for live play.
 
 **Analysis** — tempo, key, energy, onset density, polyphony estimate, register,
-each with a confidence value rather than a false certainty.
+each with a confidence value rather than a false certainty. Plus **song
+structure**: where the sections are, which repeat, and which one is the hook.
+
+**Which Shawzin to play it on** — the eleven variants differ in polyphony,
+sustain and register, and two of them change what is even playable. SHAWZIFY
+measures the music and ranks them, with the reasoning shown.
 
 **Stem separation** — Demucs (`htdemucs`), GPU when CUDA is available, CPU
 otherwise, cached by audio content hash so it never runs twice on the same file.
@@ -68,6 +74,9 @@ instrument's range`.
 **Output** — Shawzin song code, arranged MIDI, source MIDI, a rendered preview
 WAV, an analysis JSON, and a `.shawzify` project you can reopen.
 
+**Two interfaces** — a desktop app, and `shawzify web` for the same thing in a
+browser, bound to localhost.
+
 **Live play** — SHAWZIFY types the performance into Warframe using ordinary
 Windows keyboard input, the same way a macro pad or an external MIDI keyboard
 would. Warframe must be the focused window; playback stops the instant it is
@@ -82,7 +91,13 @@ scripts\setup.ps1        # ~5 minutes, downloads PyTorch and Demucs
 scripts\dev.ps1          # launches the desktop app
 ```
 
-Then drag a song onto the window.
+Then drag a song onto the window, or paste a link.
+
+Prefer a browser?
+
+```powershell
+scripts\dev.ps1 -Cli web
+```
 
 Prefer the terminal?
 
@@ -125,6 +140,15 @@ shawzify analyze song.mp3                    inspect a file without arranging it
 shawzify convert song.mp3                    convert, writing song.shawzin.txt
 shawzify convert song.mp3 --mode melody --scale auto --transpose auto
 shawzify convert input.mid --tab --export-midi --export-preview
+
+shawzify convert "https://youtube.com/watch?v=..." --focus hook
+shawzify convert "https://open.spotify.com/track/..."
+shawzify fetch "https://youtu.be/..." -o song.m4a
+
+shawzify shawzins song.mp3                   which Shawzin suits this track
+shawzify structure song.mp3                  sections, repeats and the hook
+shawzify web                                 the browser interface, on localhost
+
 shawzify decode 1BAACAIEAQJAYKAgMAo          read a song code back as music
 shawzify encode project.shawzify             print a project's song code
 shawzify scales                              list the scales and their ranges
@@ -134,12 +158,49 @@ shawzify demo                                write the bundled demo material
 
 Add `--json` to any command for machine-readable output.
 
+## Song structure, and fitting a song that does not fit
+
+The Shawzin holds four minutes and a thousand notes. A five-minute song does
+not, and the first four minutes are rarely the memorable ones.
+
+So SHAWZIFY works out where the sections are, which of them repeat, and which
+one is the hook — by building a self-similarity matrix over chroma plus register,
+density and energy contours, finding the boundaries, and clustering the segments
+that match. That gets used twice:
+
+* **Focus.** Hook Only arranges the four-minute window around the chorus instead
+  of the opening. One importable code, and it is the part people recognise.
+* **What survives.** Notes in a repeated, high-energy section outrank notes in
+  an intro, so density reduction sacrifices the intro first.
+
+Full Song remains the default and is never truncated — a long song is split into
+importable parts at phrase boundaries.
+
+## Which Shawzin?
+
+Not a cosmetic choice:
+
+| | |
+| --- | --- |
+| **Polyphony** | Dax, Nelumbo, Aristei, Kira, Lonesome, Courtly ring three strings together. Void's Song manages two. Corbu, Tiamat, Narmer and Lizzie are monophonic — a strummed chord becomes an arpeggio whether you wanted one or not. |
+| **Sustain** | Dax rings for 2 seconds; Lizzie for 28. A sustaining instrument turns a ballad lush and a fast run to mud. |
+| **Chords** | Most play a real three-note chord on a combined fret. The Tiamat slaps the note instead. |
+| **Register** | The Tiamat is a bass guitar. |
+| **Tuning** | The Nelumbo sits 25 cents sharp. |
+
+`shawzify shawzins song.mp3` measures the music — density, note spacing, chord
+fraction, register — and ranks all eleven with the reasoning and the cost. On a
+low riff it picks the Tiamat; on slow chords, the harp; on a dense vocal line,
+the shamisen.
+
 ## Architecture
 
 ```
 apps/desktop/src          React + TypeScript + Tailwind + Zustand
 apps/desktop/src-tauri    Rust: process lifecycle, Windows input, live scheduler
 engine/shawzify_engine    Python: DSP, transcription, arrangement, song code
+  sources/                local files, YouTube, Spotify metadata
+  web/                    the browser interface, bound to 127.0.0.1
 packages/shared-types     TypeScript types mirroring the engine's payloads
 ```
 
@@ -151,9 +212,13 @@ The one thing Rust does *not* delegate is live playback timing: key scheduling
 runs against a monotonic clock in Rust, because musical timing should not depend
 on the GIL or on IPC latency.
 
-`docs/architecture.md` has the full picture, and
+The same React app runs in both shells: the desktop build talks to Tauri, the
+browser build talks to the same engine methods over HTTP with SSE for progress.
+
+`docs/architecture.md` has the full picture,
 `docs/research/shawzin-format.md` documents the song code format and where every
-constant came from.
+constant came from, and `docs/research/music-sources.md` covers what YouTube and
+Spotify actually permit.
 
 ## GPU acceleration
 
@@ -184,6 +249,24 @@ Key bindings default to the documented in-game controls (`1`/`2`/`3` for
 strings, arrow keys for frets) and are fully rebindable, with a calibration
 wizard in Settings.
 
+## The browser interface
+
+```powershell
+shawzify web
+```
+
+Prints a URL and opens it. Same engine, same features, minus the two that need
+the native shell: live Warframe playback and native file dialogs.
+
+It is local-only, and enforced rather than merely intended:
+
+* Binds **127.0.0.1**. Passing any other host is refused outright.
+* Every request needs a token generated at startup and carried in the URL, so
+  nothing else on the machine can drive it by guessing the port.
+* Cross-origin requests are refused, so a page you have open elsewhere cannot
+  reach it.
+* The media route only serves files inside SHAWZIFY's own cache.
+
 ## Privacy
 
 Audio never leaves your machine. There is no telemetry, no analytics, and no
@@ -203,6 +286,15 @@ directory and never includes file contents.
   `docs/research/shawzin-format.md`.
 * Live playback is Windows-only. Everything else works anywhere Python does.
 * Microphone mode needs the optional `sounddevice` package and is experimental.
+* Spotify cannot supply audio, and since November 2024 it no longer exposes
+  tempo or key analysis to new apps either. SHAWZIFY uses it to identify a track
+  precisely and finds the recording elsewhere; see
+  `docs/research/music-sources.md`.
+* YouTube fetching needs the optional `yt-dlp` package, which you should keep
+  updated yourself — extraction breaks whenever the site changes.
+* Structure detection works well on songs with a clear verse/chorus shape. On
+  through-composed or ambient material the sections are less meaningful, and the
+  hook it picks is correspondingly less useful.
 
 ## Development
 
@@ -228,3 +320,5 @@ several community projects, which are credited in
 `docs/research/existing-tools.md`. No copyrighted game assets are included.
 
 Do not use SHAWZIFY to reproduce music you do not have the right to reproduce.
+The YouTube and Spotify routes exist to get *your own listening* onto a game
+instrument; they bypass no access control and are not a download tool.

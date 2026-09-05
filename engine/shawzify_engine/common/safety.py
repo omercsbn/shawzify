@@ -11,6 +11,8 @@ from .errors import UnsafePathError, UnsupportedFormatError
 
 AUDIO_EXTENSIONS = {
     ".wav", ".mp3", ".flac", ".m4a", ".ogg", ".opus", ".aac", ".aiff", ".aif", ".wma",
+    # Audio-only streams from a video service arrive in these containers.
+    ".webm", ".mp4", ".mkv",
 }
 MIDI_EXTENSIONS = {".mid", ".midi"}
 PROJECT_EXTENSIONS = {".shawzify"}

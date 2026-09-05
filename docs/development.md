@@ -28,6 +28,8 @@ engine/
     audio/            ffmpeg, decode, waveform, analysis
     stems/            separator interface + Demucs + pass-through
     transcription/    transcriber interface + Basic Pitch + CQT + pYIN
+    sources/          provider interface + local + YouTube + Spotify metadata
+    web/              the browser interface, bound to 127.0.0.1
     preview/          preview instrument interface + Karplus-Strong synth
     live/             scheduler, input sinks, keymap, player, microphone
     pipeline.py       stage orchestration and caching
@@ -98,10 +100,22 @@ Then type requests, one JSON object per line:
 ```powershell
 cd apps\desktop
 npm run dev        # Vite alone: the UI renders, native calls report "needs the desktop app"
-npm run tauri:dev  # the real thing
+npm run tauri:dev  # the desktop shell
 npm run test
 npx tsc --noEmit
 ```
+
+The same app also runs against the Python web server, which is often the faster
+loop because it skips the Rust build:
+
+```powershell
+cd apps\desktop; npm run build
+scripts\dev.ps1 -Cli web
+```
+
+`lib/ipc.ts` picks its transport at runtime: Tauri commands when it is running
+in the desktop shell, HTTP plus server-sent events when the page came from the
+web server. Components never know which.
 
 Outside a Tauri window `lib/ipc.ts` falls back to a clearly labelled unavailable
 bridge rather than throwing at import time, so component work does not require
@@ -180,6 +194,10 @@ hard-coded constant.
 **A transcription backend** — implement `Transcriber` in
 `transcription/base.py`, add it to `available_transcribers()` in priority order.
 `available()` must be cheap and must never raise.
+
+**An audio source** — implement `AudioSourceProvider` in `sources/base.py` and
+add it to `SourceResolver`. `available()` returns `(usable, reason)` and the
+reason is shown to the user, so make it actionable.
 
 **A stem separator** — implement `StemSeparator` in `stems/base.py`.
 

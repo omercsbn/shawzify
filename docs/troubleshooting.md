@@ -84,6 +84,80 @@ Some possibilities, in order of likelihood:
 
 The app always says which backend produced a result and which stem it used.
 
+## Links
+
+### "yt-dlp is not installed"
+
+YouTube fetching is optional and deliberately not bundled, because extraction
+breaks whenever the site changes and you want to update it yourself:
+
+```powershell
+engine\.venv\Scripts\python.exe -m pip install -U yt-dlp
+```
+
+### A download fails, or extraction errors
+
+Almost always a yt-dlp that has fallen behind. Update it with the command above.
+If it still fails, the video may be private, age-restricted or region-locked.
+
+### SHAWZIFY fetched the wrong version of a song
+
+It reports the match confidence for exactly this reason. Pick a different
+candidate:
+
+```powershell
+shawzify fetch "https://open.spotify.com/track/..." --candidate 1
+```
+
+Or paste the YouTube link of the recording you want directly, which skips the
+search entirely.
+
+### "No Spotify app credentials"
+
+Spotify needs your own app. Create one at developer.spotify.com/dashboard, then
+either put the client id and secret in Settings, or set:
+
+```powershell
+$env:SPOTIFY_CLIENT_ID = "..."
+$env:SPOTIFY_CLIENT_SECRET = "..."
+```
+
+### Spotify returns 403
+
+If it happens on a track lookup, the credentials are wrong. If you are calling
+`/audio-features` or `/audio-analysis` yourself, those have been unavailable to
+new apps since November 2024 — SHAWZIFY does not use them and does not need
+them. See `docs/research/music-sources.md`.
+
+### "Spotify does not allow applications to download audio"
+
+Correct, and not a bug. SHAWZIFY read the track details from Spotify and needs
+somewhere to hear it: install yt-dlp so it can find the recording, or point it
+at your own copy of the file.
+
+## The browser interface
+
+### "This page is no longer authorised"
+
+The token changes every time the server restarts. Reload from the URL the
+current `shawzify web` printed.
+
+### The page is blank
+
+The interface has not been built. Run `npm run build` in `apps/desktop` and
+reload. If it is built and still blank, the page now shows the error rather than
+staying empty — reload and read what it says.
+
+### Live playback is missing in the browser
+
+It is desktop-only, by design: it needs Windows key injection and window-focus
+detection that a browser tab cannot do. Everything else works in both.
+
+### Can I open it from another machine?
+
+No. The server binds 127.0.0.1 and refuses any other host. Exposing a local
+music library and file paths to a network is not something to make configurable.
+
 ## GPU
 
 ### CUDA is not detected
@@ -247,3 +321,6 @@ $env:SHAWZIFY_LOG_ECHO = "1"
 | `SHAWZIFY_ROOT` | Repository root, when the shell cannot infer it |
 | `SHAWZIFY_FFMPEG` | Path to a specific FFmpeg binary |
 | `SHAWZIFY_LOG_ECHO` | `1` to mirror structured logs to stderr |
+| `SHAWZIFY_WEB_ROOT` | Serve the web interface from a specific build directory |
+| `SPOTIFY_CLIENT_ID` | Spotify app client id (overrides the stored one) |
+| `SPOTIFY_CLIENT_SECRET` | Spotify app client secret |

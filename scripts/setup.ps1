@@ -9,6 +9,7 @@
 param(
     [switch]$SkipMl,      # skip torch / demucs / basic-pitch (much faster, fewer features)
     [switch]$Cpu,         # install the CPU-only build of PyTorch
+    [switch]$SkipYouTube, # skip yt-dlp (no YouTube or Spotify link support)
     [switch]$Force        # recreate the virtual environment from scratch
 )
 
@@ -113,6 +114,16 @@ if ($SkipMl) {
     Write-Ok 'torch, demucs, basic-pitch (ONNX), sounddevice'
 }
 
+Write-Step 'Optional: YouTube support'
+if ($SkipYouTube) {
+    Write-Note 'Skipped. Local files, MIDI and Spotify metadata still work.'
+} else {
+    # Deliberately a separate step: yt-dlp breaks whenever the site changes, so
+    # users should be able to update it on its own schedule.
+    Install-Packages @('yt-dlp')
+    Write-Ok 'yt-dlp installed. Keep it updated with: pip install -U yt-dlp'
+}
+
 # -- ffmpeg --------------------------------------------------------------
 Write-Step 'FFmpeg'
 $probe = 'from shawzify_engine.audio.ffmpeg import find_ffmpeg;i=find_ffmpeg();print(("ok|"+str(i.source)+"|"+str(i.version)) if i.available else "missing")'
@@ -157,6 +168,7 @@ Write-Ok 'assets/demo/demo.mid, demo.wav, demo.shawzin.txt'
 
 Write-Host "`nSetup complete." -ForegroundColor Green
 Write-Host '  scripts/dev.ps1    launch the desktop app'
+Write-Host '  scripts/dev.ps1 -Cli web   the same interface in a browser'
 Write-Host '  scripts/test.ps1   run every test suite'
 Write-Host '  scripts/build.ps1  produce a Windows installer'
 Write-Host ''

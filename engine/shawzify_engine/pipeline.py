@@ -362,8 +362,13 @@ def arrange_source(
 
     reporter.start("encode", "Encoding performance")
     with log.stage("encode") as detail:
-        code = arrangement.to_code()
-        detail["codeLength"] = len(code)
+        # An over-long arrangement has no single valid code; splitting produces
+        # importable parts, so this is not a failure.
+        if arrangement.over_limits:
+            detail["overLimits"] = True
+            detail["codeLength"] = 0
+        else:
+            detail["codeLength"] = len(arrangement.to_code())
     reporter.finish("encode")
 
     arrangement.report.stage_timings = log.timings_dict()
