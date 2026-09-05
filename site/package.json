@@ -10,6 +10,6 @@
     "serve:only": "npx --yes serve dist"
   },
   "dependencies": {
-    "markdown-it": "^14.1.0"
+    "markdown-it": "^15.0.1"
   }
 }
