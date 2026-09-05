@@ -210,12 +210,26 @@ impl Default for EngineManager {
 }
 
 fn spawn_engine(config: &EngineConfig, events: EventSink) -> Result<EngineHandle, EngineError> {
+    // A working directory that does not exist makes Command::spawn fail with
+    // "the directory name is invalid", which reads as a bug in SHAWZIFY rather
+    // than a missing folder. An installed copy has no engine/ beside it.
+    let working_dir = if config.working_dir.is_dir() {
+        config.working_dir.clone()
+    } else {
+        config
+            .python
+            .parent()
+            .map(Path::to_path_buf)
+            .filter(|p| p.is_dir())
+            .unwrap_or_else(std::env::temp_dir)
+    };
+
     let mut command = Command::new(&config.python);
     command
         .arg("-u") // unbuffered, so progress arrives while work is happening
         .arg("-m")
         .arg("shawzify_engine.server")
-        .current_dir(&config.working_dir)
+        .current_dir(&working_dir)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -324,36 +338,123 @@ fn spawn_engine(config: &EngineConfig, events: EventSink) -> Result<EngineHandle
     })
 }
 
+/// Does this interpreter actually have the SHAWZIFY engine installed?
+///
+/// Finding *a* Python is not the same as finding the engine. An installed copy
+/// of the app has no repository next to it, so the search used to fall through
+/// to whatever `python` was on PATH and hand the user its failure: on a stock
+/// Windows machine that is the Microsoft Store alias, and trying to run it
+/// produced "the directory name is invalid (os error 267)", which tells nobody
+/// anything.
+pub fn interpreter_has_engine(python: &Path) -> bool {
+    let mut command = Command::new(python);
+    command
+        .arg("-c")
+        .arg("import shawzify_engine")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    #[cfg(windows)]
+    command.creation_flags(CREATE_NO_WINDOW);
+    command
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
+}
+
+/// Zero-length reparse points under WindowsApps: running one opens the Store.
+fn is_store_alias(path: &Path) -> bool {
+    let looks_like_alias = path
+        .components()
+        .any(|c| c.as_os_str().eq_ignore_ascii_case("WindowsApps"));
+    looks_like_alias
+        && std::fs::metadata(path)
+            .map(|m| m.len() == 0)
+            .unwrap_or(false)
+}
+
 /// Find the Python interpreter that has the engine installed.
 ///
-/// The bundled venv is tried first so a normal install never depends on what
-/// happens to be on PATH; `SHAWZIFY_PYTHON` overrides everything for developers.
+/// `SHAWZIFY_PYTHON` wins, then a virtual environment next to the source, then
+/// anything on PATH. Every candidate is asked whether it can import the engine
+/// before it is accepted, because an interpreter without it fails later and
+/// less clearly.
 pub fn discover_python(project_root: &Path) -> Option<PathBuf> {
-    if let Ok(explicit) = std::env::var("SHAWZIFY_PYTHON") {
-        let path = PathBuf::from(explicit);
-        if path.exists() {
-            return Some(path);
+    python_candidates(project_root)
+        .into_iter()
+        .find(|candidate| interpreter_has_engine(candidate))
+}
+
+/// Where an interpreter might be, most specific first.
+pub fn python_candidates(project_root: &Path) -> Vec<PathBuf> {
+    let mut candidates: Vec<PathBuf> = Vec::new();
+    let mut push = |path: PathBuf| {
+        if path.exists() && !is_store_alias(&path) && !candidates.contains(&path) {
+            candidates.push(path);
         }
+    };
+
+    if let Ok(explicit) = std::env::var("SHAWZIFY_PYTHON") {
+        push(PathBuf::from(explicit));
     }
+    if let Some(saved) = saved_python() {
+        push(saved);
+    }
+
     let venv = if cfg!(windows) {
         "engine/.venv/Scripts/python.exe"
     } else {
         "engine/.venv/bin/python"
     };
-    let mut dir = Some(project_root.to_path_buf());
-    while let Some(current) = dir {
-        let candidate = current.join(venv);
-        if candidate.exists() {
-            return Some(candidate);
+    // From the source tree, and from wherever the executable lives, so a build
+    // run out of target/release finds the same environment a dev run does.
+    let mut roots = vec![project_root.to_path_buf()];
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            roots.push(dir.to_path_buf());
         }
-        dir = current.parent().map(Path::to_path_buf);
     }
+    for root in roots {
+        let mut dir = Some(root);
+        while let Some(current) = dir {
+            push(current.join(venv));
+            dir = current.parent().map(Path::to_path_buf);
+        }
+    }
+
     for name in ["python3", "python", "py"] {
         if let Ok(found) = which(name) {
-            return Some(found);
+            push(found);
         }
     }
-    None
+    candidates
+}
+
+/// The interpreter the user picked in Settings, if they have had to.
+pub fn python_setting_path() -> Option<PathBuf> {
+    let base = std::env::var_os("LOCALAPPDATA").map(PathBuf::from).or_else(|| {
+        std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config"))
+    })?;
+    Some(base.join("Shawzify").join("engine-python.txt"))
+}
+
+pub fn saved_python() -> Option<PathBuf> {
+    let path = python_setting_path()?;
+    let text = std::fs::read_to_string(path).ok()?;
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    Some(PathBuf::from(trimmed))
+}
+
+pub fn save_python(python: &Path) -> std::io::Result<()> {
+    let path = python_setting_path()
+        .ok_or_else(|| std::io::Error::other("no application data directory"))?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(path, python.display().to_string())
 }
 
 fn which(name: &str) -> Result<PathBuf, ()> {
@@ -387,4 +488,47 @@ pub fn project_root() -> PathBuf {
         .ok()
         .and_then(|p| p.parent().map(Path::to_path_buf))
         .unwrap_or_else(|| PathBuf::from("."))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_interpreter_without_the_engine_is_rejected() {
+        // The bug this guards: an installed copy has no virtual environment
+        // beside it, so the search fell through to whatever python was on PATH
+        // and handed the user that interpreter's failure instead of an answer.
+        assert!(!interpreter_has_engine(Path::new(
+            "definitely-not-a-real-python.exe"
+        )));
+    }
+
+    #[test]
+    fn candidates_never_include_a_store_alias() {
+        // Running one of those opens the Microsoft Store. On a stock Windows
+        // machine it is the first `python3` on PATH, and trying to spawn it
+        // reported "the directory name is invalid (os error 267)".
+        for candidate in python_candidates(Path::new(".")) {
+            assert!(
+                !is_store_alias(&candidate),
+                "offered a Store alias: {}",
+                candidate.display()
+            );
+        }
+    }
+
+    #[test]
+    fn candidates_exist_and_do_not_repeat() {
+        let candidates = python_candidates(Path::new("."));
+        let mut seen = std::collections::HashSet::new();
+        for candidate in &candidates {
+            assert!(candidate.exists(), "{} does not exist", candidate.display());
+            assert!(
+                seen.insert(candidate.clone()),
+                "listed twice: {}",
+                candidate.display()
+            );
+        }
+    }
 }

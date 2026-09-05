@@ -59,15 +59,67 @@ fn engine_status(state: State<'_, AppState>) -> EngineStatus {
 #[tauri::command]
 fn engine_start(state: State<'_, AppState>) -> Result<EngineStatus, EngineError> {
     let python = engine::discover_python(&state.root).ok_or_else(|| {
+        // This is what a downloader sees, so it has to be the whole answer.
         EngineError::Spawn(
-            "No Python interpreter with the SHAWZIFY engine was found. Run scripts/setup.ps1."
+            "SHAWZIFY could not find its audio engine. The installer ships the \
+             interface; the engine is a Python package you install once. Get the \
+             source from github.com/omercsbn/shawzify, run scripts\\setup.ps1, then \
+             press Retry. If you already have it, use \"Locate Python\" in Settings \
+             to point at that environment's python.exe."
                 .into(),
         )
     })?;
+    start_with(&state, python)?;
+    Ok(engine_status(state))
+}
+
+fn start_with(state: &State<'_, AppState>, python: PathBuf) -> Result<(), EngineError> {
+    // An installed copy has no engine/ directory; the engine runs fine from
+    // anywhere, so only use that folder when it is really there.
+    let engine_dir = state.root.join("engine");
+    let working_dir = if engine_dir.is_dir() {
+        engine_dir
+    } else {
+        state.root.clone()
+    };
     state.engine.start(EngineConfig {
         python,
-        working_dir: state.root.join("engine"),
-    })?;
+        working_dir,
+    })
+}
+
+/// Interpreters worth offering when the engine cannot be found on its own.
+#[tauri::command]
+fn engine_python_candidates(state: State<'_, AppState>) -> Vec<String> {
+    engine::python_candidates(&state.root)
+        .into_iter()
+        .map(|p| p.display().to_string())
+        .collect()
+}
+
+/// Adopt an interpreter the user chose, and remember it.
+#[tauri::command]
+fn engine_set_python(
+    state: State<'_, AppState>,
+    path: String,
+) -> Result<EngineStatus, EngineError> {
+    let python = PathBuf::from(path);
+    if !python.exists() {
+        return Err(EngineError::Spawn(format!(
+            "There is no file at {}.",
+            python.display()
+        )));
+    }
+    if !engine::interpreter_has_engine(&python) {
+        return Err(EngineError::Spawn(format!(
+            "{} runs, but the SHAWZIFY engine is not installed in it. In that \
+             environment: pip install -e engine",
+            python.display()
+        )));
+    }
+    let _ = engine::save_python(&python);
+    state.engine.stop();
+    start_with(&state, python)?;
     Ok(engine_status(state))
 }
 
@@ -301,6 +353,8 @@ pub fn run() {
             startup_file,
             engine_status,
             engine_start,
+            engine_python_candidates,
+            engine_set_python,
             engine_restart,
             engine_call,
             analyze_file,

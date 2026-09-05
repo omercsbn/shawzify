@@ -4,6 +4,7 @@ import { useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useStore } from '@/state/store';
 import { system } from '@/lib/ipc';
+import { EngineSetup } from './EngineSetup';
 import { SourceInput } from './SourceInput';
 
 function Logo({ size = 40 }: { size?: number }) {
@@ -48,6 +49,9 @@ export function Home() {
   const projectInput = useRef<HTMLInputElement>(null);
   const web = transport === 'web';
   const demo = transport === 'demo';
+  // Without an engine nothing on this screen can work, so the recovery panel
+  // replaces it rather than leaving buttons that all fail.
+  const showSetup = !engineReady && transport === 'tauri';
 
   // The published demo has a recording, not an engine; a dialog it cannot
   // honour is worse than a sentence saying so.
@@ -138,6 +142,10 @@ export function Home() {
         )}
       </AnimatePresence>
 
+      {showSetup ? (
+        <EngineSetup />
+      ) : (
+        <>
       <motion.div
         className="flex flex-col items-center text-center max-w-lg"
         initial={{ opacity: 0, y: 10 }}
@@ -220,6 +228,9 @@ export function Home() {
         </motion.div>
       )}
 
+        </>
+      )}
+
       <div className="absolute bottom-5 left-0 right-0 flex items-center justify-center gap-5 text-2xs text-paper-faint">
         <span className="inline-flex items-center gap-1.5">
           <span
@@ -227,7 +238,11 @@ export function Home() {
               engineReady ? 'bg-amber' : 'bg-red-400'
             }`}
           />
-          {engineReady ? 'Engine ready' : (engineMessage ?? 'Engine starting…')}
+          {engineReady
+            ? 'Engine ready'
+            : showSetup
+              ? 'Engine offline'
+              : (engineMessage ?? 'Engine starting…')}
         </span>
         {environment?.gpu.cuda && <span>GPU: {environment.gpu.device}</span>}
         <span>Processed locally on your machine.</span>

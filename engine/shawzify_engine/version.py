@@ -7,7 +7,7 @@ reproduced (or invalidated) later.
 
 from __future__ import annotations
 
-APP_VERSION = "0.1.0"
+APP_VERSION = "0.1.1"
 
 #: Bump when the arrangement search changes in a way that alters output.
 ARRANGEMENT_ENGINE_VERSION = "1.0.0"

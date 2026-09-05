@@ -11,6 +11,24 @@ as no longer reproducible.
 
 ## [Unreleased]
 
+## [0.1.1] — 2026-09-05
+
+### Fixed
+
+- **The installer produced an app that could not start.** A downloaded copy has
+  no source tree beside it, so the search for the engine fell through to
+  whatever `python` was on PATH. On a stock Windows machine that is the
+  Microsoft Store alias, a zero-length stub whose only job is to open the
+  Store, and trying to run it reported "the directory name is invalid (os
+  error 267)". Every candidate interpreter is now asked whether it can import
+  `shawzify_engine` before being used, Store aliases are skipped, and a working
+  directory that does not exist no longer reaches `spawn`.
+- **A missing engine now explains itself.** Instead of an OS error in small
+  grey text at the bottom of the window, the app shows what is missing, the one
+  command that installs it, the interpreters it found on the machine, and a
+  file picker to point at one. The choice is remembered.
+
+
 ## [0.1.0] — 2026-09-05
 
 The first release. Everything below is new.
@@ -90,5 +108,6 @@ The first release. Everything below is new.
 - Structured local logging, cached pipeline stages keyed by content hash and
   algorithm version, and project files that record what produced them.
 
-[Unreleased]: https://github.com/omercsbn/shawzify/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/omercsbn/shawzify/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/omercsbn/shawzify/releases/tag/v0.1.1
 [0.1.0]: https://github.com/omercsbn/shawzify/releases/tag/v0.1.0

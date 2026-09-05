@@ -434,6 +434,8 @@ export function normalizeError(raw: unknown): ShawzifyError {
 
 /** Tauri commands with no HTTP equivalent: they need the native shell. */
 const DESKTOP_ONLY = new Set([
+  'engine_python_candidates',
+  'engine_set_python',
   'live_play',
   'live_stop',
   'live_is_playing',
@@ -557,6 +559,8 @@ export const engine = {
   status: () => invoke<EngineStatus>('engine_status'),
   start: () => invoke<EngineStatus>('engine_start'),
   restart: () => invoke<EngineStatus>('engine_restart'),
+  pythonCandidates: () => invoke<string[]>('engine_python_candidates'),
+  setPython: (path: string) => invoke<EngineStatus>('engine_set_python', { path }),
   call: <T>(method: string, params: Record<string, unknown> = {}) =>
     invoke<T>('engine_call', { method, params }),
 
@@ -803,6 +807,29 @@ export const system = {
     document.body.appendChild(link);
     link.click();
     link.remove();
+  },
+
+  /** Choose a Python interpreter, for when the engine cannot be found. */
+  async pickPython(): Promise<string | null> {
+    if (!isTauri()) return null;
+    const { open } = await import('@tauri-apps/plugin-dialog');
+    const picked = await open({
+      multiple: false,
+      directory: false,
+      title: 'Select python.exe from the environment with the SHAWZIFY engine',
+      filters: [{ name: 'Python', extensions: ['exe'] }],
+    });
+    return typeof picked === 'string' ? picked : null;
+  },
+
+  /** Open a link in the user's browser. */
+  async openUrl(url: string): Promise<void> {
+    if (isTauri()) {
+      const { openUrl } = await import('@tauri-apps/plugin-opener');
+      await openUrl(url);
+      return;
+    }
+    window.open(url, '_blank', 'noopener');
   },
 
   async pickSavePath(defaultName: string, extensions: string[]): Promise<string | null> {
