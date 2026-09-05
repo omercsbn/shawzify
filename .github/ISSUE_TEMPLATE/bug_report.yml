@@ -1,0 +1,74 @@
+name: Bug report
+description: Something crashed, failed, or behaved wrongly
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        If the problem is that an *arrangement sounded bad*, use the
+        "Bad arrangement" template instead — it asks for different things.
+
+        Worth trying first: `shawzify doctor` (or Settings → Audio Engine) and
+        the [troubleshooting guide](https://github.com/omercsbn/shawzify/blob/main/docs/troubleshooting.md).
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you expected, and what happened instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the desktop app
+        2. Drop a 6-minute MP3 on it
+        3. Switch mode to Chordal
+        4. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: error
+    attributes:
+      label: The error, in full
+      description: |
+        The message the app showed, plus the technical detail behind the
+        disclosure triangle. From the CLI, the whole output.
+      render: text
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Where
+      options:
+        - Desktop app
+        - Browser interface (shawzify web)
+        - Command line
+        - Building from source
+    validations:
+      required: true
+
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Environment
+      description: |
+        Settings → Copy Debug Info, or `shawzify doctor --json`. It reports
+        versions, hardware and backend availability, with your home directory
+        redacted and no file contents.
+      render: json
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log lines
+      description: |
+        `%LOCALAPPDATA%\Shawzify\logs\shawzify.jsonl` — the last few lines
+        around the failure.
+      render: json

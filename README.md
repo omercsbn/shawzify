@@ -6,6 +6,17 @@
 
 Drop a song. Play it in Warframe.
 
+[![CI](https://github.com/omercsbn/shawzify/actions/workflows/ci.yml/badge.svg)](https://github.com/omercsbn/shawzify/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/omercsbn/shawzify?display_name=tag&sort=semver)](https://github.com/omercsbn/shawzify/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-E8A84C)](LICENSE)
+[![Windows](https://img.shields.io/badge/platform-Windows-0b0b0d)](https://github.com/omercsbn/shawzify/releases/latest)
+
+[**Website**](https://omercsbn.github.io/shawzify/) ·
+[**Download**](https://github.com/omercsbn/shawzify/releases/latest) ·
+[**Docs**](https://omercsbn.github.io/shawzify/docs/readme.html) ·
+[**Troubleshooting**](docs/troubleshooting.md) ·
+[**Contributing**](CONTRIBUTING.md)
+
 </div>
 
 ---
@@ -322,3 +333,28 @@ several community projects, which are credited in
 Do not use SHAWZIFY to reproduce music you do not have the right to reproduce.
 The YouTube and Spotify routes exist to get *your own listening* onto a game
 instrument; they bypass no access control and are not a download tool.
+
+## Contributing
+
+Bug reports, and especially *arrangements that came out badly*, are the most
+useful thing you can send — the engine is a pile of musical judgement calls and
+the only way to know one is wrong is to hear it.
+
+* [CONTRIBUTING.md](CONTRIBUTING.md) — how to set up, what the code is
+  opinionated about, and what is permanently out of scope.
+* [Report a bad arrangement](https://github.com/omercsbn/shawzify/issues/new?template=bad_arrangement.yml)
+* [Report a bug](https://github.com/omercsbn/shawzify/issues/new?template=bug_report.yml)
+* [Security policy](SECURITY.md) — please report vulnerabilities privately.
+* [Code of Conduct](CODE_OF_CONDUCT.md)
+
+## Licence and credits
+
+MIT — see [LICENSE](LICENSE). The projects this one learned the song format
+from, and the licences that apply to them, are credited in
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) and
+[docs/research/existing-tools.md](docs/research/existing-tools.md).
+
+SHAWZIFY is an independent fan project. It is not affiliated with, endorsed by,
+or connected to Digital Extremes. WARFRAME and the Shawzin are trademarks of
+Digital Extremes Ltd. No game assets are included in this repository, and no
+copyrighted music is distributed with it.

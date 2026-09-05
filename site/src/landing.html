@@ -1,0 +1,172 @@
+<div class="hero">
+  <h1>Turn any song into a<br><em>Shawzin performance</em>.</h1>
+  <p class="lede">
+    SHAWZIFY listens to a track, works out which parts of it actually carry the tune,
+    and rearranges those for the twelve notes a Warframe Shawzin can play. You get a
+    song code you can paste into the game — and a full account of every note it had
+    to change to get there.
+  </p>
+  <div class="cta">
+    <a class="btn btn-primary" href="https://github.com/omercsbn/shawzify/releases/latest" target="_blank" rel="noopener">Download for Windows</a>
+    <a class="btn" href="docs/readme.html">Read the docs</a>
+    <a class="btn" href="https://github.com/omercsbn/shawzify" target="_blank" rel="noopener">View the source</a>
+  </div>
+  <p class="note">Windows · MIT licensed · runs entirely on your machine · no account, no telemetry, nothing uploaded</p>
+</div>
+
+<figure class="shot">
+  <img src="screenshot-workspace.png" alt="The SHAWZIFY workspace: the waveform of a track, a piano roll of the arrangement, a compatibility breakdown showing 44% rising to 82%, and the detected song structure with its hook." width="1456" height="959">
+  <figcaption>Every note is coloured by what happened to it: played as written, moved to fit, folded into a Shawzin chord, arpeggiated, or removed.</figcaption>
+</figure>
+
+<section class="band">
+  <h2>The hard part was never the note numbers</h2>
+  <p class="sub">
+    A Shawzin has three strings and three frets. Twelve reachable notes, one fret
+    position at a time, four minutes and a thousand notes per song. Converting MIDI
+    note 64 into a key press is a lookup table. Deciding <em>what a song becomes</em>
+    when it has to fit through that is the actual problem, and it is what this
+    project is.
+  </p>
+  <div class="cards">
+    <div class="card">
+      <span class="tag">Importance</span>
+      <h3>Not every note is worth keeping</h3>
+      <p>Each source note is scored on confidence, velocity, melodic prominence, duration, rhythmic salience and where it falls in its phrase. A peak in the top line outranks an inner voice at the same pitch.</p>
+    </div>
+    <div class="card">
+      <span class="tag">Scale search</span>
+      <h3>Nine scales, twenty-five transpositions</h3>
+      <p>Each candidate is scored on pitch-class coverage, importance-weighted coverage, range fit, contour preservation and tonal anchoring. Near-ties prefer the shift that changes the music least — an octave keeps the key, a semitone does not.</p>
+    </div>
+    <div class="card">
+      <span class="tag">Mapping</span>
+      <h3>The line keeps its shape</h3>
+      <p>Notes are mapped as a path, not one at a time: a Viterbi pass weighs voice leading, contour direction and interval distortion together. Mapping each note independently is exactly why naive converters jump octaves mid-phrase.</p>
+    </div>
+    <div class="card">
+      <span class="tag">Harmony</span>
+      <h3>Chords reduce by function</h3>
+      <p>Only notes sharing a fret row can sound together. Survivors are ranked root and third before seventh before fifth, bass and top voice protected — and where a chord matches one of the twelve combined-fret positions, that position is used instead.</p>
+    </div>
+    <div class="card">
+      <span class="tag">Density</span>
+      <h3>Thinning where it is actually dense</h3>
+      <p>A sliding window finds the passages that exceed what a player can hit and thins only those. Removing globally-least-important notes would wreck the quiet bars to pay for the loud ones.</p>
+    </div>
+    <div class="card">
+      <span class="tag">Structure</span>
+      <h3>It knows where the chorus is</h3>
+      <p>Chroma plus register, density and energy contours find the sections; the part that repeats and hits hardest is the hook. Density reduction sacrifices an intro long before it touches a chorus — and Hook mode arranges just that part.</p>
+    </div>
+  </div>
+</section>
+
+<section class="band">
+  <h2>From a link to a song code</h2>
+  <p class="sub">Paste a YouTube link, drop an MP3, or open a MIDI file. The rest is one pipeline.</p>
+  <div class="pipeline"><pre>fetch ─▶ decode ─▶ separate stems ─▶ transcribe ─▶ analyse
+                                                     │
+                                     structure ──────┤
+                                     importance ─────┤
+                                     quantize ───────┼─▶ scale search ─▶ map ─▶ reduce ─▶ encode
+                                                     │
+                                     your settings ──┘                              ▼
+                                                                              1BAACAIEAQJAYKAgMAo</pre></div>
+  <div class="numbers">
+    <div class="stat"><b>9</b><span>scales searched, at every transposition</span></div>
+    <div class="stat"><b>11</b><span>Shawzin variants ranked for your song</span></div>
+    <div class="stat"><b>~460 ms</b><span>to re-arrange 2,000 notes when you move a slider</span></div>
+    <div class="stat"><b>0</b><span>notes silently truncated, ever</span></div>
+  </div>
+</section>
+
+<section class="band">
+  <h2>It tells you what it did to your song</h2>
+  <div class="split">
+    <ul class="plain">
+      <li><b>A compatibility score that means something.</b> Weighted by note importance across pitch error, timing shift, melody retention and harmony survival — not <code>playable / total</code>, which would rate anything already in C pentatonic at 100% no matter how badly it was arranged.</li>
+      <li><b>A reason on every changed note.</b> Moved down an octave to stay in range; folded into a Shawzin chord; dropped because three notes already sound on that fret. The piano roll colours them and the panel explains them.</li>
+      <li><b>Nothing is quietly cut.</b> A song over four minutes or a thousand notes is split at phrase boundaries into parts you import one after another. It never truncates and pretends.</li>
+      <li><b>The runners-up are shown.</b> The scale search reports the alternatives with their scores, so you can overrule it and hear why it chose what it chose.</li>
+    </ul>
+    <div>
+      <div class="callout">
+        <strong>Which Shawzin should you even use?</strong>
+        <p style="margin:0.6rem 0 0">
+          The eleven variants differ in polyphony, sustain, chord type and tuning — which
+          changes what is playable, not just what it sounds like. SHAWZIFY ranks them for
+          the arrangement in hand and says why: a bass riff wants the Tiamat, a chord piece
+          wants a polyphonic one, and a fast line ranks the 28-second Lizzie last because
+          it would smear into itself.
+        </p>
+      </div>
+      <div class="callout" style="margin-top:1rem">
+        <strong>Everything stays on your machine.</strong>
+        <p style="margin:0.6rem 0 0">
+          Your audio is never uploaded. The network is touched twice: when you explicitly
+          paste a link, and once to download an ML model the first time you use it. There
+          is no account, no telemetry and no analytics.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="band">
+  <h2>Three ways to run it</h2>
+  <div class="cards">
+    <div class="card">
+      <span class="tag">Desktop</span>
+      <h3>The app</h3>
+      <p>A Tauri window with the waveform, the piano roll, the controls and in-game playback. Drag a file onto it and go.</p>
+    </div>
+    <div class="card">
+      <span class="tag">Browser</span>
+      <h3><code>shawzify web</code></h3>
+      <p>The same interface, served to a browser tab from <code>127.0.0.1</code> with a token. No installer, no Rust toolchain — useful if you just want the engine and a UI.</p>
+    </div>
+    <div class="card">
+      <span class="tag">Terminal</span>
+      <h3><code>shawzify convert</code></h3>
+      <p>One command from a file or a link to a song code, with <code>--json</code> for the whole decision trail. Scriptable, and the engine works as a Python library too.</p>
+    </div>
+  </div>
+</section>
+
+<section class="band">
+  <h2>Playing it in game, the boring way</h2>
+  <p class="sub">
+    SHAWZIFY can perform an arrangement for you by sending ordinary keystrokes — the same
+    ones your keyboard sends — and only while Warframe is the window in front. It does not
+    inject anything, read or write game memory, hook the client, or interact with anti-cheat
+    in any way. The focus check runs before every single note and cannot be switched off;
+    alt-tab away and playback stops.
+  </p>
+  <div class="callout">
+    <strong>Not affiliated with Digital Extremes.</strong>
+    <p style="margin:0.6rem 0 0">
+      SHAWZIFY is an independent fan project. WARFRAME and the Shawzin are trademarks of
+      Digital Extremes Ltd. No game assets are included or distributed, and no copyrighted
+      music is shipped with it.
+    </p>
+  </div>
+</section>
+
+<section class="band">
+  <h2>Get started</h2>
+  <p class="sub">Windows, Python 3.12, Node 18+. Rust only if you want to build the desktop app yourself.</p>
+  <pre>git clone https://github.com/omercsbn/shawzify
+cd shawzify
+scripts\setup.ps1              # add -SkipMl to skip PyTorch and Demucs
+
+scripts\dev.ps1                # the desktop app
+scripts\dev.ps1 -Cli web       # the same interface in a browser
+scripts\dev.ps1 -Cli convert assets\demo\demo.wav</pre>
+  <p class="sub" style="margin-top:1.5rem">
+    Something not working? <a href="docs/troubleshooting.html">The troubleshooting guide</a>
+    covers FFmpeg, GPU detection, links, the browser interface and in-game timing. Bad
+    arrangement? <a href="https://github.com/omercsbn/shawzify/issues/new?template=bad_arrangement.yml" target="_blank" rel="noopener">Tell us about it</a>
+    — that is the most useful report this project can get.
+  </p>
+</section>
