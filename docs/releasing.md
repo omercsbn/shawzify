@@ -26,16 +26,19 @@ repository settings — the issue template config links to it.
    arrangement for identical input is at least a minor bump, and the relevant
    algorithm version in `engine/shawzify_engine/version.py` must move with it.
 
-2. **Bump it in all four places** — they are checked against each other by
-   `scripts/version.ps1`:
+2. **Bump it everywhere at once.** The version lives in five files, and setting
+   them by hand eventually ships an installer whose About box disagrees with
+   its own filename.
 
    ```powershell
-   scripts\version.ps1 0.2.0
+   scripts\version.ps1            # report what each file currently says
+   scripts\version.ps1 0.2.0      # set all five
    ```
 
-   That writes `engine/pyproject.toml`, `apps/desktop/package.json`,
-   `apps/desktop/src-tauri/tauri.conf.json` and
-   `apps/desktop/src-tauri/Cargo.toml`, and tells you what it changed.
+   Those files are `engine/pyproject.toml`,
+   `engine/shawzify_engine/version.py`, `apps/desktop/package.json`,
+   `apps/desktop/src-tauri/Cargo.toml` and
+   `apps/desktop/src-tauri/tauri.conf.json`.
 
 3. **Write the changelog.** Move everything from `## [Unreleased]` into a new
    version section in `CHANGELOG.md`, and add the comparison links at the
