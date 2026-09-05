@@ -10,11 +10,11 @@ from __future__ import annotations
 APP_VERSION = "0.1.1"
 
 #: Bump when the arrangement search changes in a way that alters output.
-ARRANGEMENT_ENGINE_VERSION = "1.0.0"
+ARRANGEMENT_ENGINE_VERSION = "1.1.0"
 #: Bump when the Shawzin song-code encoder/decoder changes.
 ENCODER_VERSION = "1.0.0"
 #: Bump when audio transcription changes.
-TRANSCRIPTION_VERSION = "1.0.0"
+TRANSCRIPTION_VERSION = "1.1.0"
 #: Bump when audio analysis (tempo/key/energy) changes.
 ANALYSIS_VERSION = "1.0.0"
 #: Bump when stem separation configuration changes.
