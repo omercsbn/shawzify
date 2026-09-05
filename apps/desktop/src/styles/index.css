@@ -1,0 +1,169 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+    --edge: rgba(255, 255, 255, 0.06);
+    --edge-strong: rgba(255, 255, 255, 0.1);
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-ink-900 text-paper font-sans antialiased;
+    /* A very slight warm gradient stops the near-black reading as flat grey. */
+    background-image: radial-gradient(
+      120% 90% at 50% -20%,
+      rgba(232, 168, 76, 0.05),
+      transparent 60%
+    );
+    overflow: hidden;
+    user-select: none;
+  }
+
+  ::selection {
+    background: rgba(232, 168, 76, 0.28);
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.16);
+    background-clip: content-box;
+  }
+
+  button:focus-visible,
+  [role='button']:focus-visible,
+  input:focus-visible,
+  select:focus-visible {
+    outline: 1px solid rgba(232, 168, 76, 0.7);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  /* One elevated surface treatment, used everywhere instead of ad-hoc cards. */
+  .surface {
+    @apply bg-ink-850 border border-white/[0.06] rounded-xl;
+  }
+
+  .surface-raised {
+    @apply bg-ink-800 border border-white/[0.07] rounded-xl;
+  }
+
+  .divider {
+    @apply border-white/[0.06];
+  }
+
+  .label {
+    @apply text-2xs uppercase tracking-[0.14em] text-paper-faint font-medium;
+  }
+
+  .value-lg {
+    @apply text-2xl font-medium tabular-nums text-paper;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 px-4 h-9 rounded-lg text-sm
+           font-medium transition-all duration-150 ease-swift
+           disabled:opacity-35 disabled:pointer-events-none select-none;
+  }
+
+  .btn-primary {
+    @apply btn bg-amber text-ink-900 hover:bg-amber-bright active:scale-[0.985];
+  }
+
+  .btn-ghost {
+    @apply btn bg-white/[0.04] text-paper hover:bg-white/[0.08] border border-white/[0.06];
+  }
+
+  .btn-quiet {
+    @apply btn text-paper-dim hover:text-paper hover:bg-white/[0.05];
+  }
+
+  .btn-danger {
+    @apply btn bg-red-500/15 text-red-300 hover:bg-red-500/25 border border-red-500/25;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1.5 px-2 h-6 rounded-md text-2xs
+           bg-white/[0.05] text-paper-dim border border-white/[0.05];
+  }
+
+  .segmented {
+    @apply inline-flex p-0.5 rounded-lg bg-ink-800 border border-white/[0.06];
+  }
+
+  .segmented > button {
+    @apply px-3 h-7 rounded-[0.4rem] text-xs font-medium text-paper-dim
+           transition-colors duration-150 hover:text-paper;
+  }
+
+  .segmented > button[data-active='true'] {
+    @apply bg-amber/[0.14] text-amber-bright;
+  }
+
+  .field {
+    @apply h-8 px-2.5 rounded-lg bg-ink-800 border border-white/[0.07] text-sm
+           text-paper focus:border-amber/50 outline-none transition-colors;
+  }
+
+  .scroll-y {
+    @apply overflow-y-auto overscroll-contain;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Slider styled once so every control in the app matches. */
+  input[type='range'] {
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    height: 20px;
+    cursor: pointer;
+  }
+  input[type='range']::-webkit-slider-runnable-track {
+    height: 3px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.1);
+  }
+  input[type='range']::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 13px;
+    width: 13px;
+    margin-top: -5px;
+    border-radius: 999px;
+    background: #e8a84c;
+    box-shadow: 0 0 0 3px rgba(232, 168, 76, 0.16);
+    transition: box-shadow 0.15s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  input[type='range']:hover::-webkit-slider-thumb {
+    box-shadow: 0 0 0 5px rgba(232, 168, 76, 0.2);
+  }
+  input[type='range']:disabled::-webkit-slider-thumb {
+    background: #5a5a63;
+    box-shadow: none;
+  }
+}
