@@ -151,9 +151,18 @@ scripts\dev.ps1 -Cli web
 
 ### "This page is from an earlier run of the server"
 
-The token changes every time the server restarts, so a page left open from a
-previous run is permanently unauthorised — retrying cannot fix it, and the page
-stops trying. Open the link the current `shawzify web` printed.
+The token is saved in `%LOCALAPPDATA%\Shawzify\web-token` and reused, so the
+link normally keeps working across restarts and an open page reconnects by
+itself. This message means the token actually changed — you passed
+`--new-token`, deleted the file, or the app directory is not writable. Open the
+link the current `shawzify web` printed; retrying cannot fix it, so the page
+stops trying.
+
+To invalidate every open page on purpose:
+
+```powershell
+scripts\dev.ps1 -Cli web --new-token
+```
 
 ### The page is blank
 
