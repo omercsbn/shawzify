@@ -8,6 +8,12 @@ on:
       - 'docs/**'
       - 'README.md'
       - '.github/workflows/pages.yml'
+      # The demo is the app itself, so a change to the interface changes the
+      # published site. Leaving this out meant a fix could sit on main while
+      # the demo kept serving the bug.
+      - 'apps/desktop/src/**'
+      - 'apps/desktop/package-lock.json'
+      - 'scripts/build_demo_fixture.py'
   workflow_dispatch:
 
 permissions:
