@@ -161,6 +161,38 @@ def cmd_analyze(args: argparse.Namespace) -> int:
         from .music.pitch import note_name
 
         printer.field("Pitch Range", note_name(lo) + " - " + note_name(hi))
+    if source.events:
+        # The structural picture is the part that says whether a listener would
+        # recognise the result, so it belongs in the analysis, not behind a flag.
+        from .music.structure import analyze_structure
+        from .shawzin.recommend import profile_music, recommend_shawzin
+
+        structure = analyze_structure(source.events, bpm=source.bpm, duration=source.duration)
+        if len(structure.segments) > 1:
+            printer.line()
+            printer.field("Sections", str(len(structure.segments)))
+            hook = structure.hook
+            if hook:
+                printer.field(
+                    "Hook",
+                    _fmt_time(hook.start_seconds)
+                    + " - "
+                    + _fmt_time(hook.end_seconds)
+                    + "  (" + hook.role + ", "
+                    + f"{hook.recognizability:.0%}" + " recognisable)",
+                )
+            roles = ", ".join(
+                s.role + " " + _fmt_time(s.start_seconds) for s in structure.segments[:8]
+            )
+            printer.line("  " + roles + ("  ..." if len(structure.segments) > 8 else ""))
+
+        profile = profile_music(source.events, duration=source.duration)
+        best = recommend_shawzin(profile, top_n=1)
+        if best:
+            printer.line()
+            printer.field("Best Shawzin", best[0].name + "  (" + best[0].timbre + ")")
+            printer.line("  " + best[0].reasons[0])
+
     for w in source.warnings:
         printer.line("  ! " + w)
     printer.line()
