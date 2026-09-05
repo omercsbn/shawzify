@@ -219,7 +219,149 @@ def m_arrange(params: dict[str, Any], request_id: int) -> dict[str, Any]:
         payload["splitReasons"] = []
         payload["code"] = arrangement.to_code()
     payload["tab"] = render_tab(arrangement.song, arrangement.instrument, max_rows=400)
+
+    # The UI wants these next to the arrangement, and both are cheap once the
+    # arrangement exists.
+    from .shawzin.recommend import profile_music, recommend_shawzin
+
+    profile = profile_music(source.events, duration=source.duration)
+    payload["musicProfile"] = profile.to_dict()
+    payload["shawzinSuggestions"] = [
+        s.to_dict()
+        for s in recommend_shawzin(
+            profile,
+            song=arrangement.song,
+            instrument=arrangement.instrument,
+            prefer_variant=options.shawzin_variant,
+            top_n=5,
+        )
+    ]
     return payload
+
+
+def m_sources(_params: dict[str, Any], _request_id: int) -> dict[str, Any]:
+    """Which input routes are usable right now, and why not when they are not."""
+    from .sources import SourceResolver
+
+    return {"providers": SourceResolver().describe()}
+
+
+def m_identify(params: dict[str, Any], _request_id: int) -> dict[str, Any]:
+    """Metadata for a link, without downloading anything."""
+    from .sources import SourceResolver
+
+    return SourceResolver(SESSION.cache).preview(params["target"]).to_dict()
+
+
+def m_search(params: dict[str, Any], _request_id: int) -> dict[str, Any]:
+    """Free-text search across whichever providers are configured."""
+    from .sources import SourceResolver
+
+    resolver = SourceResolver(SESSION.cache)
+    found = resolver.search(params["query"], limit=int(params.get("limit", 6)))
+    return {"results": [c.to_dict() for c in found]}
+
+
+def m_fetch(params: dict[str, Any], request_id: int) -> dict[str, Any]:
+    """Download a link to local audio, then analyse it like any other file."""
+    from .sources import SourceResolver
+
+    reporter = _reporter(request_id)
+    resolver = SourceResolver(SESSION.cache)
+    reporter.skip("stems")
+
+    def report(fraction: float, message: str = "") -> None:
+        reporter.update("decode", fraction, message)
+
+    resolved = resolver.fetch(
+        params["target"],
+        progress=report,
+        candidate_index=int(params.get("candidateIndex", 0)),
+    )
+    reporter.finish("decode", "Fetched " + resolved.reference.display)
+
+    payload: dict[str, Any] = {"source": resolved.to_dict()}
+    if params.get("analyze", True) and resolved.path is not None:
+        analysis = m_analyze(
+            {**params, "path": str(resolved.path), "requestId": request_id}, request_id
+        )
+        # The provider knows the real title; a cache filename does not.
+        analysis["title"] = resolved.reference.display or analysis.get("title")
+        analysis["track"] = resolved.reference.to_dict()
+        analysis["matchConfidence"] = resolved.match_confidence
+        analysis["matchReason"] = resolved.match_reason
+        analysis["warnings"] = list(analysis.get("warnings") or []) + resolved.warnings
+        source = SESSION.sources.get(analysis["sourceId"])
+        if source is not None:
+            source.title = analysis["title"]
+            source.warnings = analysis["warnings"]
+        payload.update(analysis)
+    return payload
+
+
+def m_recommend_shawzin(params: dict[str, Any], _request_id: int) -> dict[str, Any]:
+    """Rank the eleven Shawzins for the arrangement currently loaded."""
+    from .shawzin.recommend import profile_music, recommend_shawzin
+
+    source_id = params.get("sourceId")
+    source = SESSION.sources.get(source_id or "")
+    arrangement = SESSION.arrangements.get(source_id or "")
+    if source is None:
+        raise ShawzifyError("There is nothing loaded to recommend a Shawzin for.")
+    profile = profile_music(source.events, duration=source.duration)
+    suggestions = recommend_shawzin(
+        profile,
+        song=arrangement.song if arrangement else None,
+        instrument=arrangement.instrument if arrangement else None,
+        prefer_variant=params.get("current"),
+        top_n=int(params.get("limit", 11)),
+    )
+    return {
+        "profile": profile.to_dict(),
+        "suggestions": [s.to_dict() for s in suggestions],
+    }
+
+
+def m_structure(params: dict[str, Any], _request_id: int) -> dict[str, Any]:
+    """Sections, repeats and the hook for the loaded track."""
+    from .music.structure import analyze_structure, best_window, melodic_hook
+
+    source = SESSION.sources.get(params.get("sourceId") or "")
+    if source is None:
+        raise ShawzifyError("There is nothing loaded to analyse.")
+    structure = analyze_structure(source.events, bpm=source.bpm, duration=source.duration)
+    limit = float(params.get("windowSeconds", 240.0))
+    window = best_window(structure, window_seconds=limit, total_seconds=source.duration)
+    return {
+        "structure": structure.to_dict(),
+        "bestWindow": {"startSeconds": round(window[0], 2), "endSeconds": round(window[1], 2)},
+        "hookNotes": [n.to_dict() for n in melodic_hook(source.events, structure)],
+    }
+
+
+def m_spotify_credentials(params: dict[str, Any], _request_id: int) -> dict[str, Any]:
+    """Read or store the user's own Spotify app credentials."""
+    from .sources.spotify import SpotifyCredentials, SpotifyProvider
+
+    if params.get("save") is not None:
+        data = params["save"] or {}
+        credentials = SpotifyCredentials(
+            client_id=str(data.get("clientId", "")).strip(),
+            client_secret=str(data.get("clientSecret", "")).strip(),
+        )
+        credentials.save()
+    else:
+        credentials = SpotifyCredentials.load()
+    provider = SpotifyProvider(credentials)
+    usable, reason = provider.available()
+    return {
+        "configured": credentials.configured,
+        "clientId": credentials.client_id,
+        "available": usable,
+        "detail": reason,
+        # The secret is never sent back to the UI.
+        "hasSecret": bool(credentials.client_secret),
+    }
 
 
 def m_decode(params: dict[str, Any], _request_id: int) -> dict[str, Any]:
@@ -412,6 +554,13 @@ METHODS: dict[str, Callable[[dict[str, Any], int], dict[str, Any]]] = {
     "instrument": m_instrument,
     "analyze": m_analyze,
     "arrange": m_arrange,
+    "sources": m_sources,
+    "identify": m_identify,
+    "search": m_search,
+    "fetch": m_fetch,
+    "recommendShawzin": m_recommend_shawzin,
+    "structure": m_structure,
+    "spotifyCredentials": m_spotify_credentials,
     "decode": m_decode,
     "preview": m_preview,
     "export": m_export,
@@ -425,7 +574,7 @@ METHODS: dict[str, Callable[[dict[str, Any], int], dict[str, Any]]] = {
 
 #: Methods answered inline; everything else runs on a worker thread so that
 #: progress events and ``cancel`` keep flowing during long work.
-FAST_METHODS = {"ping", "cancel", "recents", "instrument", "keymap"}
+FAST_METHODS = {"ping", "cancel", "recents", "instrument", "keymap", "sources"}
 
 
 def _handle(request: dict[str, Any]) -> None:
