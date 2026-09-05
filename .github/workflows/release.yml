@@ -81,44 +81,21 @@ jobs:
 
       - name: Write the release notes
         id: notes
+        # The notes live in .github/release-notes.md.tpl. A PowerShell
+        # here-string cannot be used here: its terminator has to sit at column
+        # zero, which a YAML block scalar does not allow -- the whole workflow
+        # fails to parse.
         shell: pwsh
         run: |
           $tag = '${{ github.event.inputs.tag }}'
           if (-not $tag) { $tag = '${{ github.ref_name }}' }
-          $notes = @"
-## Install
-
-Download ``${{ steps.collect.outputs.name }}`` below (${{ steps.collect.outputs.size }}) and run it.
-It installs for the current user only, so it needs no administrator rights.
-
-**The desktop app needs the engine.** SHAWZIFY's audio and arrangement work is
-done by a Python engine that is not bundled in the installer — the ML model
-weights alone would make it several gigabytes. After installing, clone this
-repository and run ``scripts\setup.ps1`` once; the app finds the engine
-automatically. The [README](https://github.com/${{ github.repository }}#readme)
-has the five-minute version.
-
-Prefer no installer at all? ``scripts\dev.ps1 -Cli web`` gives you the whole
-interface in a browser, and ``shawzify convert song.mp3`` gives you a song code
-without any interface.
-
-## Verify the download
-
-``````
-SHA256  ${{ steps.collect.outputs.sha256 }}
-``````
-
-## What changed
-
-See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/$tag/CHANGELOG.md).
-
----
-
-SHAWZIFY is an independent fan project. It is not affiliated with, endorsed by,
-or connected to Digital Extremes. It sends ordinary keystrokes to a focused
-window and never touches the game process.
-"@
-          $notes | Out-File -Encoding utf8 release-notes.md
+          $notes = Get-Content .github/release-notes.md.tpl -Raw
+          $notes = $notes.Replace('{{NAME}}', '${{ steps.collect.outputs.name }}')
+          $notes = $notes.Replace('{{SIZE}}', '${{ steps.collect.outputs.size }}')
+          $notes = $notes.Replace('{{SHA256}}', '${{ steps.collect.outputs.sha256 }}')
+          $notes = $notes.Replace('{{REPO}}', '${{ github.repository }}')
+          $notes = $notes.Replace('{{TAG}}', $tag)
+          Set-Content -Path release-notes.md -Value $notes -Encoding utf8
           "tag=$tag" >> $env:GITHUB_OUTPUT
 
       - name: Publish the release
