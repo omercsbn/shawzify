@@ -14,12 +14,14 @@ import type {
   InstrumentDto,
   KeymapDto,
   ProgressPayload,
+  ProviderInfo,
   RecentProject,
   SourceDto,
+  SpotifyCredentialsDto,
   WarframeStatus,
 } from '@shawzify/shared-types';
 
-import { ShawzifyError, engine, live, system } from '@/lib/ipc';
+import { ShawzifyError, engine, live, system, transport } from '@/lib/ipc';
 
 export type View = 'home' | 'workspace' | 'settings' | 'diagnostics';
 export type PreviewTarget = 'source' | 'arrangement';
@@ -36,6 +38,8 @@ export const DEFAULT_OPTIONS: ArrangementOptionsDto = {
   maxDensity: 'auto',
   shawzinVariant: 'dax',
   stemSource: 'auto',
+  focus: 'auto',
+  useStructure: true,
 };
 
 export interface Toast {
@@ -53,6 +57,9 @@ interface AppStore {
   keymap: KeymapDto | null;
   warframe: WarframeStatus | null;
   recents: RecentProject[];
+  providers: ProviderInfo[];
+  spotify: SpotifyCredentialsDto | null;
+  transport: 'tauri' | 'web' | 'none';
   engineReady: boolean;
   engineMessage: string | null;
   onboarded: boolean;
@@ -78,6 +85,7 @@ interface AppStore {
   liveCountdown: number | null;
   liveIndex: number;
   advanced: boolean;
+  expandedShawzin: string | null;
 
   // -- actions
   setView: (view: View) => void;
@@ -94,6 +102,10 @@ interface AppStore {
 
   bootstrap: () => Promise<void>;
   refreshWarframe: () => Promise<void>;
+  loadProviders: () => Promise<void>;
+  saveSpotify: (clientId: string, clientSecret: string) => Promise<void>;
+  setExpandedShawzin: (id: string | null) => void;
+  openLink: (target: string) => Promise<void>;
   openFile: (path: string) => Promise<void>;
   openProject: (path: string) => Promise<void>;
   reArrange: (patch: Partial<ArrangementOptionsDto>) => Promise<void>;
@@ -116,6 +128,9 @@ export const useStore = create<AppStore>((set, get) => ({
   keymap: null,
   warframe: null,
   recents: [],
+  providers: [],
+  spotify: null,
+  transport: transport(),
   engineReady: false,
   engineMessage: null,
   onboarded: (() => {
@@ -145,6 +160,9 @@ export const useStore = create<AppStore>((set, get) => ({
   liveCountdown: null,
   liveIndex: 0,
   advanced: false,
+  expandedShawzin: null,
+
+  setExpandedShawzin: (expandedShawzin) => set({ expandedShawzin }),
 
   setView: (view) => set({ view }),
   setDropHover: (dropHover) => set({ dropHover }),
@@ -196,6 +214,7 @@ export const useStore = create<AppStore>((set, get) => ({
         engineMessage: null,
       });
       void get().refreshWarframe();
+      void get().loadProviders();
       // Honour a file passed on the command line once the engine is up.
       try {
         const startup = await engine.startupFile();
@@ -209,6 +228,79 @@ export const useStore = create<AppStore>((set, get) => ({
     } catch (err) {
       const e = err as ShawzifyError;
       set({ engineReady: false, engineMessage: e.message, error: e });
+    }
+  },
+
+  async loadProviders() {
+    try {
+      const [sources, spotify] = await Promise.all([
+        engine.sources(),
+        engine.spotifyCredentials().catch(() => null),
+      ]);
+      set({ providers: sources.providers, spotify });
+    } catch {
+      set({ providers: [] });
+    }
+  },
+
+  async saveSpotify(clientId, clientSecret) {
+    try {
+      const saved = await engine.spotifyCredentials({ clientId, clientSecret });
+      set({ spotify: saved });
+      get().toast(
+        saved.available ? 'success' : 'info',
+        saved.available ? 'Spotify is connected.' : saved.detail,
+      );
+      void get().loadProviders();
+    } catch (err) {
+      const e = err as ShawzifyError;
+      get().toast('error', e.message, e.technical);
+    }
+  },
+
+  /** Fetch a YouTube or Spotify link, then run the normal pipeline on it. */
+  async openLink(target) {
+    const run = ++latestRun;
+    set({
+      analyzing: true,
+      error: null,
+      progress: null,
+      source: null,
+      arrangement: null,
+      selectedDecision: null,
+      playhead: 0,
+      view: 'workspace',
+    });
+    try {
+      const source = await engine.fetch(target, {
+        useStems: get().useStems,
+        onProgress: (progress) => {
+          if (run === latestRun) set({ progress });
+        },
+      });
+      if (run !== latestRun) return;
+      set({ source, analyzing: false, arranging: true });
+      const arrangement = await engine.arrange(source.sourceId, get().options, {
+        onProgress: (progress) => {
+          if (run === latestRun) set({ progress });
+        },
+      });
+      if (run !== latestRun) return;
+      set({ arrangement, arranging: false, progress: null });
+      for (const warning of source.warnings ?? []) get().toast('info', warning);
+      if (source.matchConfidence !== undefined && source.matchConfidence < 0.6) {
+        get().toast(
+          'info',
+          'The best match for that link is uncertain. Check the result before playing it.',
+          source.matchReason,
+        );
+      }
+    } catch (err) {
+      if (run !== latestRun) return;
+      const e = err as ShawzifyError;
+      set({ analyzing: false, arranging: false, progress: null, error: e });
+      if (e.code === 'cancelled') return;
+      get().toast('error', e.message, e.hint ?? e.technical);
     }
   },
 

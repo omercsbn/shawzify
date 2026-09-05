@@ -11,6 +11,14 @@ import type {
   ArrangementDto,
   ArrangementOptionsDto,
   EngineError,
+  MusicProfileDto,
+  ProviderInfo,
+  ResolvedSourceDto,
+  SearchCandidateDto,
+  ShawzinSuggestionDto,
+  SpotifyCredentialsDto,
+  StructureResponse,
+  TrackReferenceDto,
   EnvironmentDto,
   InstrumentDto,
   KeymapDto,
@@ -34,8 +42,63 @@ interface TauriBridge {
 
 let bridge: TauriBridge | null = null;
 
+/** Injected into index.html by the local web server, with its access token. */
+interface WebRuntime {
+  token: string;
+}
+
+declare global {
+  interface Window {
+    __SHAWZIFY_WEB__?: WebRuntime;
+  }
+}
+
+export type Transport = 'tauri' | 'web' | 'none';
+
 export function isTauri(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+}
+
+export function isWeb(): boolean {
+  return typeof window !== 'undefined' && Boolean(window.__SHAWZIFY_WEB__?.token);
+}
+
+/**
+ * Which transport this build is running over.
+ *
+ * The same React app serves the desktop shell and the local web interface.
+ * Tauri wins when both are somehow present, because a desktop window has
+ * native file dialogs and live playback that the browser cannot reach.
+ */
+export function transport(): Transport {
+  if (isTauri()) return 'tauri';
+  if (isWeb()) return 'web';
+  return 'none';
+}
+
+const webToken = (): string => window.__SHAWZIFY_WEB__?.token ?? '';
+
+/** Call an engine method over HTTP, in the shape the Tauri command uses. */
+async function webCall<T>(method: string, params: Record<string, unknown>): Promise<T> {
+  const response = await fetch('/api/rpc?token=' + encodeURIComponent(webToken()), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ method, params }),
+  });
+  if (!response.ok) {
+    throw normalizeError({
+      code: 'web_transport',
+      message:
+        response.status === 403
+          ? 'This page is no longer authorised. Reload it from the link SHAWZIFY printed.'
+          : 'The SHAWZIFY engine returned ' + response.status + '.',
+      hint: null,
+      technical: null,
+    });
+  }
+  const payload = (await response.json()) as { result?: T; error?: EngineError };
+  if (payload.error) throw normalizeError(payload.error);
+  return payload.result as T;
 }
 
 async function getBridge(): Promise<TauriBridge> {
@@ -100,7 +163,43 @@ export function normalizeError(raw: unknown): ShawzifyError {
   });
 }
 
+/** Tauri commands with no HTTP equivalent: they need the native shell. */
+const DESKTOP_ONLY = new Set([
+  'live_play',
+  'live_stop',
+  'live_is_playing',
+  'warframe_status',
+  'copy_to_clipboard',
+  'reveal_path',
+  'startup_file',
+]);
+
 async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
+  if (!isTauri() && isWeb()) {
+    if (cmd === 'engine_call') {
+      const a = (args ?? {}) as { method: string; params?: Record<string, unknown> };
+      return webCall<T>(a.method, a.params ?? {});
+    }
+    if (cmd === 'engine_status') {
+      return { running: true, python: null, root: '', error: null } as unknown as T;
+    }
+    if (cmd === 'engine_start' || cmd === 'engine_restart') {
+      return { running: true, python: null, root: '', error: null } as unknown as T;
+    }
+    if (cmd === 'warframe_status') {
+      return { found: false, focused: false, title: null, supported: false } as unknown as T;
+    }
+    if (cmd === 'startup_file') return null as unknown as T;
+    if (cmd === 'live_is_playing') return false as unknown as T;
+    if (DESKTOP_ONLY.has(cmd)) {
+      throw normalizeError({
+        code: 'desktop_only',
+        message: 'That needs the SHAWZIFY desktop app.',
+        hint: 'Live Warframe playback and native file dialogs are desktop-only.',
+        technical: cmd,
+      });
+    }
+  }
   const b = await getBridge();
   try {
     return await b.invoke<T>(cmd, args);
@@ -124,6 +223,27 @@ let progressBound = false;
 async function bindProgress(): Promise<void> {
   if (progressBound) return;
   progressBound = true;
+
+  if (!isTauri() && isWeb()) {
+    // The web transport streams the same events over SSE. It reconnects on
+    // its own, so a dropped connection does not silently kill progress.
+    const source = new EventSource('/api/events?token=' + encodeURIComponent(webToken()));
+    source.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data) as {
+          id: number;
+          event: string;
+          payload: ProgressPayload;
+        };
+        const handler = progressHandlers.get(message.id);
+        if (handler && message.event === 'progress') handler(message.payload);
+      } catch {
+        /* a malformed frame is not worth breaking the stream over */
+      }
+    };
+    return;
+  }
+
   const b = await getBridge();
   if (!b.available) return;
   await b.listen<{ id: number; kind: string; payload: ProgressPayload }>(
@@ -190,6 +310,61 @@ export const engine = {
       params: { code, variant },
     }),
 
+  /** Identify a link without downloading anything. */
+  identify: (target: string) =>
+    invoke<ResolvedSourceDto>('engine_call', { method: 'identify', params: { target } }),
+
+  sources: () =>
+    invoke<{ providers: ProviderInfo[] }>('engine_call', { method: 'sources', params: {} }),
+
+  searchTracks: (query: string, limit = 6) =>
+    invoke<{ results: SearchCandidateDto[] }>('engine_call', {
+      method: 'search',
+      params: { query, limit },
+    }),
+
+  spotifyCredentials: (save?: { clientId: string; clientSecret: string }) =>
+    invoke<SpotifyCredentialsDto>('engine_call', {
+      method: 'spotifyCredentials',
+      params: save ? { save } : {},
+    }),
+
+  recommendShawzin: (sourceId: string, current?: string) =>
+    invoke<{ profile: MusicProfileDto; suggestions: ShawzinSuggestionDto[] }>('engine_call', {
+      method: 'recommendShawzin',
+      params: { sourceId, current },
+    }),
+
+  structure: (sourceId: string, windowSeconds = 240) =>
+    invoke<StructureResponse>('engine_call', {
+      method: 'structure',
+      params: { sourceId, windowSeconds },
+    }),
+
+  /** Download a link and analyse it, as one operation. */
+  async fetch(
+    target: string,
+    opts: {
+      useStems?: boolean;
+      candidateIndex?: number;
+      onProgress?: ProgressHandler;
+    } = {},
+  ): Promise<SourceDto & { track?: TrackReferenceDto; matchConfidence?: number; matchReason?: string }> {
+    const requestId = newRequestId();
+    return withProgress(requestId, opts.onProgress, () =>
+      invoke('engine_call', {
+        method: 'fetch',
+        params: {
+          target,
+          requestId,
+          analyze: true,
+          useStems: opts.useStems ?? true,
+          candidateIndex: opts.candidateIndex ?? 0,
+        },
+      }),
+    );
+  },
+
   async analyze(
     path: string,
     options: Partial<ArrangementOptionsDto>,
@@ -252,6 +427,15 @@ export const engine = {
 
 // -- system --------------------------------------------------------------
 
+/** A URL the page can play, for a file the engine produced. */
+export async function mediaUrl(path: string): Promise<string> {
+  if (isTauri()) {
+    const { convertFileSrc } = await import('@tauri-apps/api/core');
+    return convertFileSrc(path);
+  }
+  return '/media?token=' + encodeURIComponent(webToken()) + '&path=' + encodeURIComponent(path);
+}
+
 export const system = {
   copy: async (text: string): Promise<void> => {
     // Prefer the webview clipboard; fall back to the native path.
@@ -271,7 +455,7 @@ export const system = {
   reveal: (path: string) => invoke<void>('reveal_path', { path }),
 
   async pickFile(kind: 'media' | 'project'): Promise<string | null> {
-    if (!isTauri()) return null;
+    if (!isTauri()) return null; // the browser cannot hand over a real path
     const { open } = await import('@tauri-apps/plugin-dialog');
     const filters =
       kind === 'project'
