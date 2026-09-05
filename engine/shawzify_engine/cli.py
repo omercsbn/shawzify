@@ -3,8 +3,14 @@
     shawzify analyze song.mp3
     shawzify convert song.mp3 --mode melody --scale auto --transpose auto
     shawzify convert input.mid -o out.txt
+    shawzify convert "https://youtube.com/watch?v=..." --focus hook
+    shawzify convert "https://open.spotify.com/track/..."
+    shawzify fetch "https://youtu.be/..." -o song.m4a
+    shawzify shawzins song.mp3
+    shawzify structure song.mp3
     shawzify decode 1BAACAIEAQJAYKAgMAo
     shawzify encode project.shawzify
+    shawzify web
     shawzify doctor
 """
 
@@ -17,7 +23,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from .arrangement.options import AUTO, ArrangementMode, ArrangementOptions, StemSource
+from .arrangement.options import AUTO, ArrangementMode, ArrangementOptions, Focus, StemSource
 from .common.errors import ShawzifyError
 from .common.progress import ProgressEvent, ProgressReporter
 from .version import APP_VERSION
@@ -56,6 +62,41 @@ class _Printer:
             print(f"         {event.message}")
 
 
+def _resolve_input(args: argparse.Namespace, printer: _Printer) -> str:
+    """Turn whatever was given into a local file path, fetching if needed."""
+    from .sources import SourceResolver, looks_like_url
+
+    target = args.input
+    if not looks_like_url(target):
+        return target
+
+    resolver = SourceResolver()
+    printer.line("Fetching " + target)
+    last = {"stage": ""}
+
+    def report(fraction: float, message: str = "") -> None:
+        if message and message != last["stage"]:
+            last["stage"] = message
+            printer.line(f"  [{fraction * 100:>3.0f}%] {message}")
+
+    resolved = resolver.fetch(
+        target,
+        progress=None if printer.quiet else report,
+        candidate_index=getattr(args, "candidate", 0),
+    )
+    if resolved.path is None:
+        raise ShawzifyError("No audio could be fetched for that link.")
+    printer.field("Track", resolved.reference.display)
+    if resolved.match_confidence < 0.999:
+        printer.field(
+            "Match", f"{resolved.match_confidence:.0%} - {resolved.match_reason}"
+        )
+    for warning in resolved.warnings:
+        printer.line("  ! " + warning)
+    printer.line()
+    return str(resolved.path)
+
+
 def _options_from_args(args: argparse.Namespace) -> ArrangementOptions:
     def auto_or(value: str, cast: Any = None) -> Any:
         if value is None or str(value).lower() == "auto":
@@ -63,6 +104,7 @@ def _options_from_args(args: argparse.Namespace) -> ArrangementOptions:
         return cast(value) if cast else value
 
     quant = "auto" if args.quantize is None else args.quantize
+    focus = getattr(args, "focus", "auto")
     return ArrangementOptions(
         mode=ArrangementMode(args.mode),
         scale=auto_or(args.scale),
@@ -75,6 +117,8 @@ def _options_from_args(args: argparse.Namespace) -> ArrangementOptions:
         max_density=auto_or(args.max_density, float),
         shawzin_variant=args.shawzin,
         stem_source=StemSource(args.stem),
+        focus=AUTO if focus in (None, "auto") else Focus(focus),
+        use_structure=not getattr(args, "no_structure", False),
     )
 
 
@@ -87,7 +131,7 @@ def cmd_analyze(args: argparse.Namespace) -> int:
     printer = _Printer(args.quiet, args.json)
     reporter = ProgressReporter(printer.progress)
     source = load_source(
-        args.input,
+        _resolve_input(args, printer),
         _options_from_args(args),
         progress=reporter,
         use_stems=not args.no_stems,
@@ -135,7 +179,7 @@ def cmd_convert(args: argparse.Namespace) -> int:
     options = _options_from_args(args)
 
     source = load_source(
-        args.input,
+        _resolve_input(args, printer),
         options,
         progress=reporter,
         use_stems=not args.no_stems,
@@ -249,6 +293,11 @@ def cmd_convert(args: argparse.Namespace) -> int:
     printer.field("Transpose", f"{report.transpose:+d} semitones")
     printer.field("Mode", arrangement.resolved.mode.title())
     printer.field("Quantization", arrangement.resolved.quantization)
+    if arrangement.resolved.focus_window:
+        window = arrangement.resolved.focus_window
+        printer.field(
+            "Focus", "hook, " + _fmt_time(window[0]) + " - " + _fmt_time(window[1])
+        )
     printer.line()
     before: CompatibilityBreakdown = report.compatibility_before
     after: CompatibilityBreakdown = report.compatibility_after
@@ -264,6 +313,20 @@ def cmd_convert(args: argparse.Namespace) -> int:
     printer.field("Arrangement length", _fmt_time(report.duration_seconds))
     if report.parts > 1:
         printer.field("Parts", report.parts)
+
+    if args.shawzin_advice:
+        from .shawzin.recommend import profile_music, recommend_shawzin
+
+        printer.line()
+        printer.line("Recommended Shawzin")
+        profile = profile_music(source.events, duration=source.duration)
+        for suggestion in recommend_shawzin(
+            profile, song=arrangement.song, instrument=arrangement.instrument, top_n=3
+        ):
+            d = suggestion.to_dict()
+            printer.line("  {:>5.1f}  {:<22} {}".format(d["score"], d["name"], d["timbre"]))
+            if d["reasons"]:
+                printer.line("         " + d["reasons"][0])
 
     if args.tab:
         printer.line()
@@ -288,6 +351,171 @@ def cmd_convert(args: argparse.Namespace) -> int:
             printer.line("  " + w)
     printer.line()
     return 0
+
+
+def cmd_fetch(args: argparse.Namespace) -> int:
+    """Download a link to local audio without arranging it."""
+    import shutil
+
+    from .sources import SourceResolver
+
+    printer = _Printer(args.quiet, args.json)
+    resolver = SourceResolver()
+    resolved = resolver.fetch(
+        args.target,
+        progress=None if printer.quiet else (
+            lambda f, m="": printer.line(f"  [{f * 100:>3.0f}%] {m}") if m else None
+        ),
+        candidate_index=args.candidate,
+    )
+    destination = resolved.path
+    if args.output and resolved.path is not None:
+        destination = Path(args.output)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(resolved.path, destination)
+
+    if args.json:
+        payload = resolved.to_dict()
+        payload["savedTo"] = str(destination) if destination else None
+        print(json.dumps(payload, indent=2))
+        return 0
+
+    printer.line(_banner())
+    printer.field("Track", resolved.reference.display)
+    if resolved.reference.duration_seconds:
+        printer.field("Duration", _fmt_time(resolved.reference.duration_seconds))
+    printer.field("Source", resolved.kind)
+    printer.field("Match", f"{resolved.match_confidence:.0%}")
+    if resolved.match_reason:
+        printer.line("  " + resolved.match_reason)
+    printer.field("Audio", str(destination))
+    for warning in resolved.warnings:
+        printer.line("  ! " + warning)
+    if resolved.alternatives and len(resolved.alternatives) > 1:
+        printer.line()
+        printer.line("Other candidates (--candidate N to pick one)")
+        for i, candidate in enumerate(resolved.alternatives[:5]):
+            printer.line(
+                f"  {i}  {candidate.score:>5.0%}  {candidate.reference.display[:60]}"
+            )
+    printer.line()
+    return 0
+
+
+def cmd_shawzins(args: argparse.Namespace) -> int:
+    """Recommend a Shawzin for a piece of music."""
+    from .pipeline import arrange_source, load_source
+    from .shawzin.recommend import profile_music, recommend_shawzin
+
+    printer = _Printer(args.quiet, args.json)
+    reporter = ProgressReporter(printer.progress)
+    options = _options_from_args(args)
+    source = load_source(
+        _resolve_input(args, printer),
+        options,
+        progress=reporter,
+        use_stems=not args.no_stems,
+    )
+    arrangement = arrange_source(source, options, progress=reporter)
+    profile = profile_music(source.events, duration=source.duration)
+    suggestions = recommend_shawzin(
+        profile,
+        song=arrangement.song,
+        instrument=arrangement.instrument,
+        top_n=args.limit,
+    )
+
+    if args.json:
+        print(json.dumps(
+            {"profile": profile.to_dict(), "suggestions": [x.to_dict() for x in suggestions]},
+            indent=2,
+        ))
+        return 0
+
+    printer.line(_banner())
+    printer.field("Input", Path(source.path).name)
+    printer.field("Notes", f"{len(source.events):,} at {profile.notes_per_second:.1f}/second")
+    printer.field("Chords", f"{profile.chord_fraction:.0%} of moments")
+    printer.field("Register", "median MIDI " + str(profile.median_pitch))
+    printer.field("Note spacing", f"{profile.mean_gap_seconds:.2f}s average")
+    printer.line()
+    for i, suggestion in enumerate(suggestions):
+        d = suggestion.to_dict()
+        marker = "->" if i == 0 else "  "
+        printer.line("{} {:>5.1f}  {}".format(marker, d["score"], d["name"]))
+        printer.line("          {}".format(d["timbre"]))
+        for reason in d["reasons"][:3]:
+            printer.line("          + " + reason)
+        for warning in d["warnings"][:3]:
+            printer.line("          ! " + warning)
+        printer.line()
+    return 0
+
+
+def cmd_structure(args: argparse.Namespace) -> int:
+    """Show a song's sections and where its hook is."""
+    from .music.structure import analyze_structure, best_window, melodic_hook
+    from .pipeline import load_source
+
+    printer = _Printer(args.quiet, args.json)
+    reporter = ProgressReporter(printer.progress)
+    source = load_source(
+        _resolve_input(args, printer),
+        _options_from_args(args),
+        progress=reporter,
+        use_stems=not args.no_stems,
+    )
+    structure = analyze_structure(source.events, bpm=source.bpm, duration=source.duration)
+    window = best_window(
+        structure, window_seconds=args.window, total_seconds=source.duration
+    )
+    hook_notes = melodic_hook(source.events, structure)
+
+    if args.json:
+        print(json.dumps({
+            "structure": structure.to_dict(),
+            "bestWindow": {"startSeconds": window[0], "endSeconds": window[1]},
+            "hookNotes": [n.to_dict() for n in hook_notes],
+        }, indent=2))
+        return 0
+
+    printer.line(_banner())
+    printer.field("Input", Path(source.path).name)
+    printer.field("Duration", _fmt_time(source.duration))
+    printer.field("Tempo", f"{source.bpm:.0f} BPM")
+    printer.line()
+    printer.line("  start    end      role      repeats  recognisable")
+    printer.line("  -------  -------  --------  -------  ------------")
+    for segment in structure.segments:
+        marker = "  <- hook" if segment.index == structure.hook_index else ""
+        printer.line(
+            "  {:>7}  {:>7}  {:<8}  {:>7}  {:>11.0%}{}".format(
+                _fmt_time(segment.start_seconds),
+                _fmt_time(segment.end_seconds),
+                segment.role,
+                "x" + str(segment.repetitions),
+                segment.recognizability,
+                marker,
+            )
+        )
+    printer.line()
+    printer.field(
+        "Best " + str(int(args.window)) + "s window",
+        _fmt_time(window[0]) + " - " + _fmt_time(window[1]),
+    )
+    if hook_notes:
+        printer.field("Hook melody", " ".join(n.pitch_name for n in hook_notes[:16]))
+    printer.line()
+    printer.line("  Use --focus hook on convert to arrange just that window.")
+    printer.line()
+    return 0
+
+
+def cmd_web(args: argparse.Namespace) -> int:
+    """Run the browser interface, bound to localhost."""
+    from .web import serve
+
+    return serve(port=args.port, open_browser=not args.no_browser)
 
 
 def cmd_decode(args: argparse.Namespace) -> int:
@@ -442,6 +670,12 @@ def _add_arrangement_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--device", default="auto", choices=["auto", "cuda", "cpu"])
     p.add_argument("--max-seconds", type=float, default=None,
                    help="only process the first N seconds")
+    p.add_argument("--focus", default="auto", choices=["auto", "full", "hook"],
+                   help="arrange the whole song, or just its most recognisable part")
+    p.add_argument("--no-structure", action="store_true",
+                   help="do not weight notes by how recognisable their section is")
+    p.add_argument("--candidate", type=int, default=0,
+                   help="when fetching a link, pick the Nth search result")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -460,14 +694,15 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     a = sub.add_parser("analyze", parents=[common],
-                       help="analyse a file without arranging it")
-    a.add_argument("input")
+                       help="analyse a file or link without arranging it")
+    a.add_argument("input", help="a file, or a YouTube or Spotify link")
     a.add_argument("--events", action="store_true", help="include note events in --json")
     _add_arrangement_args(a)
     a.set_defaults(func=cmd_analyze)
 
-    c = sub.add_parser("convert", parents=[common], help="convert audio or MIDI into a Shawzin song code")
-    c.add_argument("input")
+    c = sub.add_parser("convert", parents=[common],
+                       help="convert audio, MIDI or a link into a Shawzin song code")
+    c.add_argument("input", help="a file, or a YouTube or Spotify link")
     c.add_argument("-o", "--output", help="write the song code here")
     c.add_argument("--out-dir", help="directory for generated files")
     c.add_argument("--no-write", action="store_true", help="print only, write nothing")
@@ -479,8 +714,39 @@ def build_parser() -> argparse.ArgumentParser:
                    help="print the first N events as tab")
     c.add_argument("--dry-run-live", action="store_true",
                    help="simulate live playback and report timing accuracy")
+    c.add_argument("--shawzin-advice", action="store_true",
+                   help="also recommend which Shawzin to play it on")
     _add_arrangement_args(c)
     c.set_defaults(func=cmd_convert)
+
+    f = sub.add_parser("fetch", parents=[common],
+                       help="download a YouTube or Spotify link to local audio")
+    f.add_argument("target", help="a YouTube or Spotify link")
+    f.add_argument("-o", "--output", help="copy the audio here")
+    f.add_argument("--candidate", type=int, default=0,
+                   help="pick the Nth search result instead of the best one")
+    f.set_defaults(func=cmd_fetch)
+
+    sh = sub.add_parser("shawzins", parents=[common],
+                        help="recommend which Shawzin to play a track on")
+    sh.add_argument("input", help="a file, or a YouTube or Spotify link")
+    sh.add_argument("--limit", type=int, default=5)
+    _add_arrangement_args(sh)
+    sh.set_defaults(func=cmd_shawzins)
+
+    st = sub.add_parser("structure", parents=[common],
+                        help="show a song's sections and where its hook is")
+    st.add_argument("input", help="a file, or a YouTube or Spotify link")
+    st.add_argument("--window", type=float, default=240.0,
+                    help="length of the best-window search, in seconds")
+    _add_arrangement_args(st)
+    st.set_defaults(func=cmd_structure)
+
+    w = sub.add_parser("web", parents=[common],
+                       help="run the browser interface on localhost")
+    w.add_argument("--port", type=int, default=8733)
+    w.add_argument("--no-browser", action="store_true")
+    w.set_defaults(func=cmd_web)
 
     d = sub.add_parser("decode", parents=[common], help="decode a Shawzin song code")
     d.add_argument("code", help="a song code, or a file containing one")
