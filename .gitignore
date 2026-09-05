@@ -56,3 +56,6 @@ conversion.json
 
 # Built site output (site/public/demo/ is a committed recording, not output)
 site/dist/
+
+# Personal drafts for posting about the project, not project documentation
+docs/announcement/
