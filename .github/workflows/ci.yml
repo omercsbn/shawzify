@@ -68,7 +68,7 @@ jobs:
         run: |
           engine/.venv/Scripts/python.exe -m shawzify_engine.cli demo --out-dir assets/demo --quiet
           engine/.venv/Scripts/python.exe -m shawzify_engine.cli convert assets/demo/demo.mid --no-write --json > conversion.json
-          engine/.venv/Scripts/python.exe -c "import json; r = json.load(open('conversion.json')); code = r['arrangement']['code']; print('code:', code[:48]); assert len(code) % 3 == 1"
+          engine/.venv/Scripts/python.exe scripts/check_conversion.py conversion.json
         shell: pwsh
 
   lint-rust:
