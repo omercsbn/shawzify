@@ -5,8 +5,8 @@
  * them; there is never a million-sample array in the renderer.
  */
 
-import { useEffect, useRef } from 'react';
-import type { PhraseDto, WaveformDto } from '@shawzify/shared-types';
+import { useEffect, useMemo, useRef } from 'react';
+import type { NoteEventDto, PhraseDto, WaveformDto } from '@shawzify/shared-types';
 
 import { formatTime } from './primitives';
 
@@ -17,6 +17,46 @@ interface Props {
   phrases?: PhraseDto[];
   onSeek?: (seconds: number) => void;
   height?: number;
+  /**
+   * Used when there is no waveform -- a MIDI file has no audio, so the strip
+   * shows note activity over time instead of an empty box.
+   */
+  events?: NoteEventDto[];
+}
+
+/** Phrase boundaries: where the engine would cut the song for splitting. */
+function drawPhrases(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  phrases: PhraseDto[],
+  duration: number,
+): void {
+  if (duration <= 0 || phrases.length < 2) return;
+  ctx.strokeStyle = 'rgba(90,200,216,0.32)';
+  ctx.setLineDash([2, 3]);
+  for (const phrase of phrases.slice(1)) {
+    const x = (phrase.startSeconds / duration) * width;
+    ctx.beginPath();
+    ctx.moveTo(x, 4);
+    ctx.lineTo(x, height - 4);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+}
+
+/** Per-bucket note activity: sum of velocities of notes sounding in each slice. */
+function noteEnvelope(events: NoteEventDto[], duration: number, buckets: number): number[] {
+  const out = new Array<number>(buckets).fill(0);
+  if (duration <= 0 || events.length === 0) return out;
+  for (const e of events) {
+    const from = Math.max(0, Math.floor((e.startSeconds / duration) * buckets));
+    const end = e.startSeconds + e.durationSeconds;
+    const to = Math.min(buckets - 1, Math.floor((end / duration) * buckets));
+    for (let i = from; i <= to; i += 1) out[i] += 0.35 + 0.65 * e.velocity;
+  }
+  const peak = Math.max(...out, 1);
+  return out.map((v) => v / peak);
 }
 
 export function Waveform({
@@ -26,9 +66,14 @@ export function Waveform({
   phrases = [],
   onSeek,
   height = 84,
+  events,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const envelope = useMemo(
+    () => (waveform || !events?.length ? null : noteEnvelope(events, duration, 240)),
+    [waveform, events, duration],
+  );
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -58,7 +103,19 @@ export function Waveform({
       ctx.lineTo(width, mid);
       ctx.stroke();
 
-      if (!waveform || waveform.max.length === 0) return;
+      if (!waveform || waveform.max.length === 0) {
+        // No audio: draw note activity, mirrored so it still reads as a strip.
+        if (envelope) {
+          const step = width / envelope.length;
+          ctx.fillStyle = 'rgba(232,168,76,0.45)';
+          for (let i = 0; i < envelope.length; i += 1) {
+            const h = Math.max(0.8, envelope[i] * mid * 0.9);
+            ctx.fillRect(i * step, mid - h, Math.max(0.8, step - 0.4), h * 2);
+          }
+        }
+        drawPhrases(ctx, width, height, phrases, duration);
+        return;
+      }
 
       const buckets = waveform.max.length;
       const step = width / buckets;
@@ -79,26 +136,14 @@ export function Waveform({
         ctx.fillRect(i * step, y, Math.max(0.7, step - 0.5), h);
       }
 
-      // Phrase boundaries: where the engine would cut the song.
-      if (duration > 0) {
-        ctx.strokeStyle = 'rgba(90,200,216,0.32)';
-        ctx.setLineDash([2, 3]);
-        for (const phrase of phrases.slice(1)) {
-          const x = (phrase.startSeconds / duration) * width;
-          ctx.beginPath();
-          ctx.moveTo(x, 4);
-          ctx.lineTo(x, height - 4);
-          ctx.stroke();
-        }
-        ctx.setLineDash([]);
-      }
+      drawPhrases(ctx, width, height, phrases, duration);
     };
 
     draw();
     const observer = new ResizeObserver(draw);
     observer.observe(wrap);
     return () => observer.disconnect();
-  }, [waveform, phrases, duration, height]);
+  }, [waveform, envelope, phrases, duration, height]);
 
   const ratio = duration > 0 ? Math.max(0, Math.min(1, playhead / duration)) : 0;
 
