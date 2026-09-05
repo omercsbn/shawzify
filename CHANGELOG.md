@@ -11,7 +11,7 @@ as no longer reproducible.
 
 ## [Unreleased]
 
-## [0.1.0] — first public release
+## [0.1.0] — 2026-09-05
 
 The first release. Everything below is new.
 
@@ -68,8 +68,8 @@ The first release. Everything below is new.
   note, structure bar, compatibility breakdown, Shawzin picker, export.
 - The same interface in a browser via `shawzify web`, bound to `127.0.0.1`
   with a token that survives restarts.
-- A command line covering convert, analyze, arrange, fetch, decode, split,
-  tab, scales, shawzins, structure, doctor and demo.
+- A command line: `convert`, `analyze`, `fetch`, `shawzins`, `structure`,
+  `decode`, `encode`, `scales`, `doctor`, `demo` and `web`.
 - The engine is usable as a Python library.
 
 ### Live playback
