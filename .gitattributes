@@ -1,0 +1,32 @@
+# Normalise line endings. Without this, editing on Windows and reviewing on
+# anything else turns every touched file into a whole-file diff.
+* text=auto eol=lf
+
+# PowerShell is Windows-facing and some tooling still expects CRLF here.
+*.ps1 text eol=crlf
+*.psm1 text eol=crlf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Binary, so Git never tries to be clever with them.
+*.png binary
+*.ico binary
+*.icns binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.wav binary
+*.mp3 binary
+*.flac binary
+*.mid binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.pt binary
+*.onnx binary
+
+# Generated: collapse in pull-request diffs rather than drowning the review.
+apps/desktop/package-lock.json linguist-generated=true
+apps/desktop/src-tauri/Cargo.lock linguist-generated=true
+site/package-lock.json linguist-generated=true
+engine/shawzify_engine/shawzin/data/shawzin_instrument.json linguist-generated=true
