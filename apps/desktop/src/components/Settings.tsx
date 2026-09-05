@@ -320,6 +320,100 @@ function EnvironmentPanel({ environment }: { environment: EnvironmentDto | null 
   );
 }
 
+function SourcesPanel() {
+  const { providers, spotify, saveSpotify, loadProviders } = useStore();
+  const [clientId, setClientId] = useState('');
+  const [clientSecret, setClientSecret] = useState('');
+  const [editing, setEditing] = useState(false);
+
+  useEffect(() => {
+    void loadProviders();
+  }, [loadProviders]);
+
+  useEffect(() => {
+    if (spotify) setClientId(spotify.clientId);
+  }, [spotify]);
+
+  return (
+    <Panel title="Input Sources">
+      <div className="space-y-1.5">
+        {providers.map((p) => (
+          <div key={p.id} className="flex items-start gap-3 text-sm">
+            <span
+              className={`mt-1.5 w-1.5 h-1.5 rounded-full shrink-0 ${
+                p.available ? 'bg-amber' : 'bg-paper-faint'
+              }`}
+            />
+            <div className="min-w-0 flex-1">
+              <div className="text-paper-dim">{p.name}</div>
+              {!p.available && (
+                <div className="text-2xs text-paper-faint leading-relaxed mt-0.5">{p.detail}</div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-4 pt-3 border-t divider">
+        <div className="flex items-center justify-between">
+          <span className="label">Spotify</span>
+          <button
+            type="button"
+            className="text-2xs text-paper-faint hover:text-paper"
+            onClick={() => setEditing(!editing)}
+          >
+            {editing ? 'Cancel' : spotify?.configured ? 'Change' : 'Connect'}
+          </button>
+        </div>
+        <p className="mt-2 text-2xs text-paper-faint leading-relaxed">
+          Spotify does not let applications download audio, and since November 2024 it no
+          longer exposes tempo or key analysis to new apps either. SHAWZIFY uses it only to
+          identify a track precisely, then finds the recording elsewhere and does its own
+          analysis.
+        </p>
+        {editing && (
+          <div className="mt-3 space-y-2">
+            <p className="text-2xs text-paper-faint">
+              Create an app at developer.spotify.com/dashboard and paste its credentials.
+              They are stored on this machine only.
+            </p>
+            <input
+              className="field w-full"
+              placeholder="Client ID"
+              value={clientId}
+              spellCheck={false}
+              onChange={(e) => setClientId(e.target.value)}
+              aria-label="Spotify client ID"
+            />
+            <input
+              className="field w-full"
+              type="password"
+              placeholder={spotify?.hasSecret ? '(unchanged)' : 'Client secret'}
+              value={clientSecret}
+              spellCheck={false}
+              onChange={(e) => setClientSecret(e.target.value)}
+              aria-label="Spotify client secret"
+            />
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={!clientId.trim() || (!clientSecret.trim() && !spotify?.hasSecret)}
+              onClick={() => {
+                void saveSpotify(clientId.trim(), clientSecret.trim());
+                setEditing(false);
+                setClientSecret('');
+              }}
+            >
+              Save Credentials
+            </button>
+          </div>
+        )}
+      </div>
+    </Panel>
+  );
+}
+
+
 export function Settings() {
   const { keymap, environment, saveKeymap, useStems, setUseStems, setView } = useStore();
 
@@ -348,6 +442,8 @@ export function Settings() {
       <div className="flex-1 min-h-0 scroll-y p-4">
         <div className="max-w-3xl mx-auto grid grid-cols-2 gap-4 items-start">
           <EnvironmentPanel environment={environment} />
+
+          <SourcesPanel />
 
           <Panel title="Processing">
             <div className="space-y-3">

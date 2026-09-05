@@ -107,6 +107,8 @@ export const arrangementFixture: ArrangementDto = {
     maxDensity: 8.2,
     arpeggiateChords: true,
     leadInTicks: 44,
+    focus: 'full',
+    focusWindow: null,
     detail: { observedDensity: 3.1, peakDensityAfter: 2.8, scaleScore: 91.2 },
   },
   report: {
@@ -231,6 +233,43 @@ export const arrangementFixture: ArrangementDto = {
   splitReasons: [],
   tab: 'Scale: Major',
   engineVersion: '1.0.0',
+  structure: {
+    segments: [
+      {
+        index: 0, startSeconds: 0, endSeconds: 12, durationSeconds: 12, label: 0,
+        repetitions: 1, energy: 0.4, density: 2.1, recognizability: 0.42, role: 'intro',
+      },
+      {
+        index: 1, startSeconds: 12, endSeconds: 30, durationSeconds: 18, label: 1,
+        repetitions: 2, energy: 0.9, density: 3.4, recognizability: 0.94, role: 'chorus',
+      },
+    ],
+    hookIndex: 1,
+    hook: {
+      index: 1, startSeconds: 12, endSeconds: 30, durationSeconds: 18, label: 1,
+      repetitions: 2, energy: 0.9, density: 3.4, recognizability: 0.94, role: 'chorus',
+    },
+    backend: 'events',
+  },
+  musicProfile: {
+    notesPerSecond: 2.4, peakNotesPerSecond: 6, meanPolyphony: 1.2, maxPolyphony: 3,
+    chordFraction: 0.18, meanGapSeconds: 0.42, medianPitch: 72, lowFraction: 0.05,
+    sustainFraction: 0.2, noteCount: 73,
+  },
+  shawzinSuggestions: [
+    {
+      variantId: 'dax', name: "Dax's Shawzin", score: 86.0, polyphony: 'polyphonic',
+      timbre: 'Shamisen - bright, percussive, short decay',
+      reasons: ['Plays all three strings together.', "A shamisen's attack keeps a busy line crisp."],
+      warnings: [], notesLost: 0,
+    },
+    {
+      variantId: 'corbu', name: 'Corbu Shawzin', score: 54.0, polyphony: 'monophonic',
+      timbre: 'Electric guitar with overdrive - sustained and gritty',
+      reasons: ['Overdriven guitar suits sustained lines.'],
+      warnings: ['Monophonic: every chord becomes a fast arpeggio.'], notesLost: 12,
+    },
+  ],
 };
 
 export const instrumentFixture: InstrumentDto = {

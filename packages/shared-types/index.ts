@@ -124,6 +124,9 @@ export interface SourceDto {
   stemUsed: string;
   contentHash: string;
   warnings: string[];
+  track?: TrackReferenceDto;
+  matchConfidence?: number;
+  matchReason?: string;
   audio?: AudioMetadataDto;
   analysis?: TrackAnalysisDto;
   waveform?: WaveformDto;
@@ -210,6 +213,8 @@ export type StemSource =
   | 'bass'
   | 'drums'
   | 'other';
+export type Focus = 'auto' | 'full' | 'hook';
+
 export type QuantizeSetting =
   | 'auto'
   | 'off'
@@ -232,6 +237,8 @@ export interface ArrangementOptionsDto {
   maxDensity: number | 'auto';
   shawzinVariant: string;
   stemSource: StemSource;
+  focus: Focus;
+  useStructure: boolean;
 }
 
 export type Operation =
@@ -330,6 +337,8 @@ export interface ResolvedOptionsDto {
   maxDensity: number;
   arpeggiateChords: boolean;
   leadInTicks: number;
+  focus: string;
+  focusWindow: [number, number] | null;
   detail: Record<string, number>;
 }
 
@@ -372,6 +381,9 @@ export interface ArrangementDto {
   splitReasons: string[];
   tab: string;
   engineVersion: string;
+  structure: SongStructureDto | null;
+  musicProfile: MusicProfileDto;
+  shawzinSuggestions: ShawzinSuggestionDto[];
 }
 
 // -- environment / diagnostics ------------------------------------------
@@ -445,4 +457,106 @@ export interface LiveStats {
   max_error_ms: number;
   stopped_early: boolean;
   stop_reason: string | null;
+}
+
+// -- audio sources -------------------------------------------------------
+
+export interface TrackReferenceDto {
+  title: string;
+  artist: string;
+  album: string;
+  durationSeconds: number | null;
+  provider: 'local' | 'youtube' | 'spotify' | string;
+  sourceId: string;
+  url: string;
+  artworkUrl: string | null;
+  isrc: string | null;
+  display: string;
+  extra: Record<string, unknown>;
+}
+
+export interface SearchCandidateDto {
+  reference: TrackReferenceDto;
+  score: number;
+  reasons: string[];
+}
+
+export interface ResolvedSourceDto {
+  kind: string;
+  reference: TrackReferenceDto;
+  path: string | null;
+  matchConfidence: number;
+  matchReason: string;
+  alternatives: SearchCandidateDto[];
+  warnings: string[];
+}
+
+export interface ProviderInfo {
+  id: 'local' | 'youtube' | 'spotify' | string;
+  name: string;
+  online: boolean;
+  available: boolean;
+  detail: string;
+}
+
+export interface SpotifyCredentialsDto {
+  configured: boolean;
+  clientId: string;
+  available: boolean;
+  detail: string;
+  hasSecret: boolean;
+}
+
+// -- song structure ------------------------------------------------------
+
+export interface SegmentDto {
+  index: number;
+  startSeconds: number;
+  endSeconds: number;
+  durationSeconds: number;
+  label: number;
+  repetitions: number;
+  energy: number;
+  density: number;
+  recognizability: number;
+  role: 'intro' | 'verse' | 'chorus' | 'bridge' | 'outro' | 'section' | string;
+}
+
+export interface SongStructureDto {
+  segments: SegmentDto[];
+  hookIndex: number | null;
+  hook: SegmentDto | null;
+  backend: string;
+}
+
+export interface StructureResponse {
+  structure: SongStructureDto;
+  bestWindow: { startSeconds: number; endSeconds: number };
+  hookNotes: NoteEventDto[];
+}
+
+// -- Shawzin recommendation ---------------------------------------------
+
+export interface MusicProfileDto {
+  notesPerSecond: number;
+  peakNotesPerSecond: number;
+  meanPolyphony: number;
+  maxPolyphony: number;
+  chordFraction: number;
+  meanGapSeconds: number;
+  medianPitch: number;
+  lowFraction: number;
+  sustainFraction: number;
+  noteCount: number;
+}
+
+export interface ShawzinSuggestionDto {
+  variantId: string;
+  name: string;
+  score: number;
+  polyphony: 'polyphonic' | 'duophonic' | 'monophonic';
+  timbre: string;
+  reasons: string[];
+  warnings: string[];
+  notesLost: number;
 }

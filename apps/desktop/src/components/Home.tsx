@@ -3,6 +3,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useStore } from '@/state/store';
 import { system } from '@/lib/ipc';
+import { SourceInput } from './SourceInput';
 
 function Logo({ size = 40 }: { size?: number }) {
   return (
@@ -69,8 +70,18 @@ export function Home() {
           your machine.
         </p>
 
-        <div className="mt-8 flex items-center gap-2">
-          <button type="button" className="btn-primary px-5" onClick={pick}>
+        <div className="mt-8 w-full">
+          <SourceInput />
+        </div>
+
+        <div className="mt-4 flex items-center gap-3 w-full">
+          <span className="flex-1 h-px bg-white/[0.07]" />
+          <span className="text-2xs text-paper-faint">or</span>
+          <span className="flex-1 h-px bg-white/[0.07]" />
+        </div>
+
+        <div className="mt-4 flex items-center gap-2">
+          <button type="button" className="btn-ghost" onClick={pick}>
             Choose Audio or MIDI
           </button>
           <button type="button" className="btn-ghost" onClick={pickProject}>
@@ -85,6 +96,8 @@ export function Home() {
           <span>M4A</span>
           <span>OGG</span>
           <span>MIDI</span>
+          <span>YouTube</span>
+          <span>Spotify</span>
         </div>
       </motion.div>
 

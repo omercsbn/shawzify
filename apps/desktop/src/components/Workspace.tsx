@@ -13,6 +13,9 @@ import { Compatibility } from './Compatibility';
 import { Controls } from './Controls';
 import { Export } from './Export';
 import { PianoRoll } from './PianoRoll';
+import { ShawzinPicker } from './ShawzinPicker';
+import { StructurePanel } from './Structure';
+import { MatchNotice } from './SourceInput';
 import { Waveform } from './Waveform';
 import { EmptyHint, Panel, Skeleton, Stat, formatTime } from './primitives';
 
@@ -97,6 +100,7 @@ export function Workspace() {
     setPlayhead,
     selectedDecision,
     setSelectedDecision,
+    options,
     reArrange,
     toast,
     reset,
@@ -299,6 +303,14 @@ export function Workspace() {
 
         {/* -- right rail ------------------------------------------------ */}
         <div className="flex flex-col gap-4 min-h-0 scroll-y pr-1 -mr-1 [&>section]:shrink-0">
+          {source.matchConfidence !== undefined && source.matchConfidence < 0.999 && (
+            <MatchNotice
+              confidence={source.matchConfidence}
+              reason={source.matchReason ?? ''}
+              title={source.track?.display ?? source.title}
+            />
+          )}
+
           {arrangement ? (
             <Compatibility
               arrangement={arrangement}
@@ -309,7 +321,25 @@ export function Workspace() {
             <Skeleton className="h-64" />
           )}
 
+          {arrangement?.structure && (
+            <StructurePanel
+              structure={arrangement.structure}
+              duration={duration}
+              focusWindow={arrangement.resolved.focusWindow}
+              overLimit={arrangement.parts.length > 0}
+              onSeek={setPlayhead}
+            />
+          )}
+
           <Controls instrument={instrument} />
+
+          {arrangement && arrangement.shawzinSuggestions?.length > 0 && (
+            <ShawzinPicker
+              suggestions={arrangement.shawzinSuggestions}
+              profile={arrangement.musicProfile}
+              current={options.shawzinVariant}
+            />
+          )}
 
           {arrangement && report && report.warnings.length > 0 && (
             <Panel title="Warnings">
