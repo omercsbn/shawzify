@@ -52,6 +52,33 @@ model download on first use of an ML backend. No audio ever leaves the machine.
   read your documents; the token is not a boundary against your own account.
 * The bundled FFmpeg. Report those upstream.
 
+## Advisories that do not apply here
+
+Dependency scanners flag the whole lockfile, and a lockfile covers every
+platform. Two categories show up on this project and neither reaches anyone who
+installs it:
+
+**`glib` (RUSTSEC unsoundness in `VariantStrIter`).** It arrives through
+`tauri > muda > gtk > atk > glib`, and every link in that chain is Linux only.
+SHAWZIFY ships Windows, where the crate is not in the dependency graph at all:
+
+```powershell
+cd apps\desktop\src-tauri
+cargo tree -i glib --target x86_64-pc-windows-msvc   # prints nothing
+cargo tree -i glib --target x86_64-unknown-linux-gnu # prints the chain above
+```
+
+It is also not fixable from here: 0.18.5 is the newest version Tauri's chain
+permits and the fix landed in 0.20.0. A future Tauri release will carry it.
+
+**Vite, Vitest and esbuild dev-server advisories.** Those are build tooling.
+They matter to someone running `npm run dev` on a machine that then visits a
+hostile page; they are not in the installer, and `npm audit --omit=dev` reports
+nothing. They still get updated, because a contributor's machine is worth
+protecting too.
+
+If you find one that *does* apply, the reporting instructions are above.
+
 ## Supported versions
 
 The latest release. This is a small project; there are no maintenance branches.
