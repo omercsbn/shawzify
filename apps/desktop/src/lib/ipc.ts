@@ -556,10 +556,11 @@ export const engine = {
       params: { sourceId },
     }),
 
-  export: (sourceId: string, kind: string, path: string) =>
+  /** `path` is omitted by the browser, which cannot choose one; see uploadFile. */
+  export: (sourceId: string, kind: string, path?: string) =>
     invoke<{ path: string; kind: string }>('engine_call', {
       method: 'export',
-      params: { sourceId, kind, path },
+      params: path ? { sourceId, kind, path } : { sourceId, kind },
     }),
 
   openProject: (path: string) =>
@@ -611,6 +612,69 @@ export const system = {
           ];
     const picked = await open({ multiple: false, directory: false, filters });
     return typeof picked === 'string' ? picked : null;
+  },
+
+  /**
+   * Hand a file the browser holds to the engine, which needs a real path.
+   *
+   * The page cannot give one -- that is the whole reason this exists. The
+   * bytes go to the local server, which stores them in SHAWZIFY's cache and
+   * answers with the path it wrote.
+   */
+  async uploadFile(file: File): Promise<string> {
+    if (!isWeb()) {
+      throw normalizeError({
+        code: 'not_web',
+        message: 'Uploading is only used by the browser interface.',
+        hint: null,
+        technical: null,
+      });
+    }
+    let response: Response;
+    try {
+      response = await fetch('/api/upload?token=' + encodeURIComponent(webToken()), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/octet-stream',
+          'X-Shawzify-Filename': encodeURIComponent(file.name).replace(/%20/g, ' '),
+        },
+        body: file,
+      });
+    } catch (err) {
+      setConnection('offline');
+      scheduleReconnect();
+      throw normalizeError({
+        code: 'server_gone',
+        message: 'The SHAWZIFY server is not running, so the file could not be sent.',
+        hint: 'Start it again with: scripts\\dev.ps1 -Cli web, then open the link it prints.',
+        technical: String(err),
+      });
+    }
+    const payload = (await response.json().catch(() => ({}))) as {
+      result?: { path: string };
+      error?: EngineError;
+    };
+    if (payload.error) throw normalizeError(payload.error);
+    if (!response.ok || !payload.result?.path) {
+      throw normalizeError({
+        code: 'upload_failed',
+        message: 'The file could not be sent to the SHAWZIFY engine.',
+        hint: null,
+        technical: 'HTTP ' + response.status,
+      });
+    }
+    return payload.result.path;
+  },
+
+  /** Save a file the engine produced, from a browser tab. */
+  async downloadFromCache(path: string, filename: string): Promise<void> {
+    const url = await mediaUrl(path);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
   },
 
   async pickSavePath(defaultName: string, extensions: string[]): Promise<string | null> {

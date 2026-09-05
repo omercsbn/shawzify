@@ -354,3 +354,14 @@ $env:SHAWZIFY_LOG_ECHO = "1"
 | `SHAWZIFY_WEB_ROOT` | Serve the web interface from a specific build directory |
 | `SPOTIFY_CLIENT_ID` | Spotify app client id (overrides the stored one) |
 | `SPOTIFY_CLIENT_SECRET` | Spotify app client secret |
+
+### Opening and saving files in the browser
+
+A browser tab cannot hand a page a real file path, and cannot write one either,
+so the browser interface does both through the local server: choosing or
+dropping a file uploads it into SHAWZIFY's cache, and every export is written
+there and downloaded back. Uploads are capped at 256 MB and only accept audio,
+MIDI and `.shawzify` projects.
+
+Nothing leaves your machine — the "server" is the one running in your own
+terminal.

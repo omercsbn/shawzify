@@ -118,6 +118,7 @@ interface AppStore {
   setExpandedShawzin: (id: string | null) => void;
   openLink: (target: string) => Promise<void>;
   openFile: (path: string) => Promise<void>;
+  openUploaded: (file: File) => Promise<void>;
   openProject: (path: string) => Promise<void>;
   reArrange: (patch: Partial<ArrangementOptionsDto>) => Promise<void>;
   setUseStems: (value: boolean) => void;
@@ -340,6 +341,28 @@ export const useStore = create<AppStore>((set, get) => ({
     } catch {
       set({ warframe: null });
     }
+  },
+
+  /**
+   * Open a file the browser handed us.
+   *
+   * The engine works in paths, and a page cannot produce one, so the bytes go
+   * to the local server first. Projects and songs both arrive this way.
+   */
+  async openUploaded(file) {
+    const { system } = await import('@/lib/ipc');
+    set({ analyzing: true, error: null, view: 'workspace' });
+    let path: string;
+    try {
+      path = await system.uploadFile(file);
+    } catch (err) {
+      const e = err as ShawzifyError;
+      set({ analyzing: false, error: e });
+      get().toast('error', e.message, e.technical);
+      return;
+    }
+    if (file.name.toLowerCase().endsWith('.shawzify')) await get().openProject(path);
+    else await get().openFile(path);
   },
 
   async openFile(path) {
