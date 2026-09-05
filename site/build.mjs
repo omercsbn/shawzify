@@ -83,6 +83,15 @@ function renderMarkdown(source, fromFile) {
   for (const token of tokens) {
     if (token.type !== 'inline' || !token.children) continue;
     for (const child of token.children) {
+      if (child.type === 'image') {
+        // Screenshots are copied into the site, so a repo-relative image path
+        // has to point at that copy -- otherwise the README renders here with
+        // a broken picture at the very top.
+        const src = child.attrGet('src') ?? '';
+        const shot = src.match(/assets\/screenshots\/(.+)$/);
+        if (shot) child.attrSet('src', '../screenshots/' + shot[1]);
+        continue;
+      }
       if (child.type !== 'link_open') continue;
       const href = child.attrGet('href');
       if (!href) continue;
@@ -223,6 +232,10 @@ for (const page of PAGES) {
 cpSync(join(here, 'src', 'styles.css'), join(out, 'styles.css'));
 cpSync(join(here, 'src', 'favicon.svg'), join(out, 'favicon.svg'));
 if (existsSync(join(here, 'public'))) cpSync(join(here, 'public'), out, { recursive: true });
+// Screenshots live with the repository, not the site, so the README and the
+// landing page cannot end up showing different versions of the interface.
+const shots = join(root, 'assets', 'screenshots');
+if (existsSync(shots)) cpSync(shots, join(out, 'screenshots'), { recursive: true });
 writeFileSync(join(out, '.nojekyll'), '');
 
 console.log(`Built the landing page and ${rendered} documentation pages into site/dist.`);
