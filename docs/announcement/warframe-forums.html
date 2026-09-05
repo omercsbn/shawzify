@@ -13,22 +13,19 @@
   .howto p { margin: 0.4rem 0; }
   .post { border-top: 2px solid #e3e3e6; padding-top: 1.5rem; }
   img { max-width: 100%; height: auto; border-radius: 6px; }
-  h2 { font-size: 1.2rem; margin: 2rem 0 0.6rem; }
-  li { margin: 0.35rem 0; }
-  code { background: #f1f1f3; padding: 0.1em 0.35em; border-radius: 3px; font-size: 0.9em; }
+  h2 { font-size: 1.25rem; margin: 2.2rem 0 0.6rem; }
+  li { margin: 0.4rem 0; }
 </style>
 </head>
 <body>
 
 <div class="howto">
-  <p><strong>How to use this file:</strong> select everything below the line
-  (click into the post, then Ctrl+A selects the whole page — that is fine, the
-  box you are reading is small), copy, and paste into the Warframe forum editor.
-  Formatting and images come across.</p>
+  <p><strong>How to use this file:</strong> click into the post, Ctrl+A, Ctrl+C,
+  and paste into the Warframe forum editor. Formatting and images come across.</p>
   <p><strong>Where:</strong> a new topic in
-  <a href="https://forums.warframe.com/forum/17-fan-zone/">Fan Zone</a>.
-  <strong>Title:</strong> SHAWZIFY — turn any song into a Shawzin performance
-  (Windows, free, open source)<br>
+  <a href="https://forums.warframe.com/forum/17-fan-zone/">Fan Zone</a>.<br>
+  <strong>Title:</strong> SHAWZIFY — Turn Almost Any Song into a Shawzin
+  Performance (Free &amp; Open Source)<br>
   <strong>Tag:</strong> Community — and nothing else. The rest of that list is
   platform tags, and this is a Windows program.</p>
   <p><strong>Better:</strong> after pasting, re-upload the three images through
@@ -41,86 +38,173 @@
 <p>The Shawzin has twelve notes. Most music does not.</p>
 
 <p>Every tool I could find takes a MIDI file and maps note numbers onto Shawzin
-keys, which works right up until the music does not fit — and it usually does
-not fit. Notes fall outside the range and get clamped. Chords need one fret
-position and get mangled. The tune survives on paper and dies in your ears.</p>
+keys. That works right up until the music does not fit — and usually, it does
+not.</p>
 
-<p>So I spent a while building the other half: <strong>SHAWZIFY takes a song and
-decides what should survive.</strong></p>
+<p>Notes fall outside the range. Chords do not fit the available fret positions.
+Melodies jump octaves. The tune survives on paper and dies in your ears.</p>
+
+<p>So I spent a while building the other half:</p>
+
+<p><strong>SHAWZIFY takes a song and decides what should survive.</strong></p>
 
 <p><img src="https://omercsbn.github.io/shawzify/screenshots/workspace.png"
-        alt="The SHAWZIFY workspace: waveform, piano roll of the arrangement, compatibility breakdown and song structure"></p>
+        alt="The SHAWZIFY workspace: waveform, piano roll, compatibility breakdown and song structure"></p>
 
-<p><strong>Windows, free, MIT licensed</strong> — and there is a browser demo
-further down if you would rather look before installing anything.</p>
+<p>Drop in an MP3, WAV or MIDI file — or paste a YouTube link.</p>
 
-<p>Drop in an MP3, a WAV, a MIDI file, or paste a YouTube link. It separates the
-stems, transcribes the notes, works out the key and the tempo, finds where the
-chorus is — and then arranges it for the instrument you are actually holding.
-Out comes a song code you paste into the game.</p>
+<p>SHAWZIFY separates the stems, transcribes the notes, detects the key and
+tempo, finds the song structure, and then arranges the result specifically for
+the Shawzin.</p>
 
-<p><strong>What "arranging" means here:</strong></p>
+<p>At the end, you get a Shawzin song code you can paste into the game.</p>
+
+<h2>What "arranging" actually means</h2>
+
+<p>This is not just MIDI note → Shawzin key mapping.</p>
 
 <ul>
-  <li>Every note is scored for importance — confidence, velocity, whether it is
-      carrying the melody, where it sits in its phrase — and reductions start
-      from the bottom.</li>
-  <li>All nine scales are searched at every transposition, scored on how much of
-      the music each one keeps.</li>
-  <li>The melody is mapped as a <em>path</em>, not note by note, so the line
-      keeps its shape instead of jumping octaves at the range boundary.</li>
-  <li>Chords reduce by harmonic function — root and third before the fifth — and
-      fall back to the Shawzin's own chord positions when they fit.</li>
-  <li>Dense passages are thinned only where they are actually too dense.</li>
-  <li>Nothing is silently truncated. A song past the four-minute or 1000-note
-      limit is split at phrase boundaries into parts you import one after
-      another.</li>
+  <li>Every note gets an importance score based on transcription confidence,
+      velocity, melodic role, phrase position and rhythmic significance. When
+      something has to disappear, low-value information goes first.</li>
+  <li>All nine Shawzin scales are searched across possible transpositions and
+      ranked by how much musical information they preserve.</li>
+  <li>The melody is mapped as a <strong>path</strong>, rather than mapping every
+      note independently. That lets it preserve melodic contour instead of
+      suddenly jumping octaves whenever it hits the Shawzin's range
+      boundary.</li>
+  <li>Chords are reduced by harmonic importance — typically preserving the root
+      and third before less important chord tones — and can fall back to native
+      Shawzin chord positions when appropriate.</li>
+  <li>Dense passages are simplified only where their actual note density exceeds
+      what the instrument can reasonably reproduce.</li>
+  <li>Songs that exceed the compatibility limits SHAWZIFY targets are not
+      silently truncated. They are split at musical phrase boundaries into
+      separately importable parts.</li>
 </ul>
 
 <p><img src="https://omercsbn.github.io/shawzify/screenshots/panels.png"
-        alt="The compatibility breakdown, the detected song structure, and the ranked Shawzin recommendation"></p>
+        alt="Compatibility analysis, detected song structure and ranked Shawzin recommendation"></p>
 
-<p><strong>It also tells you which Shawzin to play it on.</strong> The eleven
-variants differ in polyphony, sustain and tone, and two of them change what is
-even playable. SHAWZIFY measures the music and ranks them with the reasoning
-shown — a fast line does not want a 28-second sustain, a chord piece wants
-something polyphonic.</p>
+<h2>It also recommends which Shawzin to use</h2>
 
-<p><strong>And it tells you what it did to your song.</strong> Every changed note
-carries a reason, and the piano roll colours them: played as written, moved to
-fit, folded into a chord, arpeggiated, removed.</p>
+<p>SHAWZIFY models the musical properties of the supported Shawzin profiles
+rather than treating every instrument as interchangeable.</p>
+
+<p>Tone, sustain, chord behaviour and other instrument characteristics can make
+one Shawzin much better suited to a particular arrangement than another.</p>
+
+<p>The engine measures the track and ranks the available choices with an
+explanation.</p>
+
+<p>A fast, dense melody probably does not want an instrument with an extremely
+long sustain.</p>
+
+<p>A chord-heavy arrangement may benefit from an instrument that handles those
+passages differently.</p>
+
+<p>You can see the reasoning instead of getting a mystery score.</p>
+
+<h2>And it tells you what it changed</h2>
+
+<p>Every modified note carries an arrangement decision explaining what happened
+to it — moved into range, folded down an octave, replaced by a Shawzin chord
+position, spread into an arpeggio, or dropped — and the piano roll colours each
+note by which of those it was.</p>
 
 <p><img src="https://omercsbn.github.io/shawzify/screenshots/warnings.png"
-        alt="The warnings panel listing how many notes were removed, shifted or arpeggiated and why"></p>
+        alt="The warnings panel showing removed, shifted and arpeggiated notes — and why"></p>
 
-<p><strong>Try it without installing anything:</strong> the interface is
-published at
-<a href="https://omercsbn.github.io/shawzify/demo/">omercsbn.github.io/shawzify/demo</a>
-— that is the real app, replaying a real conversion. Switch modes, poke at the
-panels, see what it produces.</p>
+<p>So if the result sounds wrong, you can actually inspect what the arranger
+decided instead of staring at a finished song code.</p>
 
-<p><strong>Downloads and source:</strong>
-<a href="https://github.com/omercsbn/shawzify">github.com/omercsbn/shawzify</a></p>
+<h2>Try it without installing anything</h2>
 
-<p>It also plays the arrangement in game if you want it to — ordinary key
-presses, the same ones your keyboard sends, and only while Warframe is the
-focused window. It does not inject anything, read or write game memory, hook the
-client, or touch anti-cheat in any way. The focus check runs before every note
-and cannot be switched off; alt-tab away and it stops. Everything else — the
-whole conversion — runs offline on your own machine, and nothing about your
-music is ever uploaded.</p>
+<p><strong>Interactive demo:</strong>
+<a href="https://omercsbn.github.io/shawzify/demo/">https://omercsbn.github.io/shawzify/demo/</a></p>
 
-<p>Free, MIT licensed, and the source is all there, including
-<a href="https://github.com/omercsbn/shawzify/blob/main/docs/research/shawzin-format.md">the
-format research</a> and credit to the tools I learned the song-code format
+<p>This is the real SHAWZIFY interface replaying a real conversion.</p>
+
+<p>Switch arrangement modes, inspect the piano roll, open the analysis panels and
+see what the engine produced.</p>
+
+<h2>Download / Source</h2>
+
+<p><strong>GitHub:</strong>
+<a href="https://github.com/omercsbn/shawzify">https://github.com/omercsbn/shawzify</a></p>
+
+<p>SHAWZIFY is free and MIT licensed.</p>
+
+<p>The repository also includes the research behind the Shawzin song-code
+implementation:
+<a href="https://github.com/omercsbn/shawzify/blob/main/docs/research/shawzin-format.md">docs/research/shawzin-format.md</a>
+— along with credit to the existing Shawzin tools and projects I learned
 from.</p>
 
-<p><strong>What would help most:</strong> a song it arranges badly. Post the
-track and the settings and I will look at what the engine did wrong — the
-arrangement is a pile of musical judgement calls, and the only way to know one
-is wrong is to hear it go wrong.</p>
+<h2>Optional in-game playback</h2>
 
-<p><em>SHAWZIFY is an independent fan project. It is not affiliated with or
+<p>SHAWZIFY can also play an arrangement through the game on PC using external
+keyboard input events.</p>
+
+<p>It does <strong>not</strong>:</p>
+
+<ul>
+  <li>inject DLLs</li>
+  <li>modify Warframe</li>
+  <li>read or write game memory</li>
+  <li>hook the game client</li>
+  <li>interact with anti-cheat</li>
+</ul>
+
+<p>Playback only runs while the Warframe window is focused.</p>
+
+<p>The focus check happens before every scheduled note and cannot be disabled.
+If Warframe loses focus, playback stops.</p>
+
+<p>This feature is optional; song-code generation and export do not depend on
+it.</p>
+
+<p>As with any third-party software used alongside Warframe, users should make
+their own decision based on Digital Extremes' third-party software policy.</p>
+
+<h2>Local-first</h2>
+
+<p>The conversion pipeline runs locally on your own machine.</p>
+
+<p>Your audio is not uploaded to SHAWZIFY or to an AI/cloud service for
+processing.</p>
+
+<p>Stem separation, transcription, analysis and arrangement happen locally.</p>
+
+<h2>What would help me most</h2>
+
+<p><strong>Give me a song SHAWZIFY arranges badly.</strong></p>
+
+<p>Seriously.</p>
+
+<p>Post the track, the arrangement mode/settings you used, and what sounds
+wrong.</p>
+
+<p>The arrangement engine is ultimately a pile of musical judgement calls:</p>
+
+<p>Which note matters more?</p>
+
+<p>Which octave sounds less wrong?</p>
+
+<p>When should a chord become an arpeggio?</p>
+
+<p>When does simplification destroy the melody instead of helping it?</p>
+
+<p>The fastest way to improve those decisions is to find songs where they
+fail.</p>
+
+<p>So if you manage to make SHAWZIFY butcher something:</p>
+
+<p><strong>I want to hear it.</strong></p>
+
+<hr>
+
+<p><em>SHAWZIFY is an independent fan-made project. It is not affiliated with or
 endorsed by Digital Extremes.</em></p>
 
 </div>
