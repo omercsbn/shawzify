@@ -254,6 +254,32 @@ def test_export_and_preview(engine_process, demo_midi, tmp_path):
     assert preview["durationSeconds"] > 1.0
 
 
+@pytest.mark.parametrize(
+    ("request_id", "method", "params", "missing"),
+    [
+        (401, "export", {"sourceId": "x", "path": "out.txt"}, "kind"),
+        (402, "decode", {}, "code"),
+        (403, "identify", {}, "target"),
+        (404, "openProject", {}, "path"),
+        (405, "arrange", {"options": {}}, "sourceId"),
+        (406, "search", {}, "query"),
+    ],
+)
+def test_a_malformed_request_names_the_missing_parameter(
+    engine_process, request_id, method, params, missing
+):
+    """A caller that got the request wrong must be told, not handed a KeyError.
+
+    These used to index params directly, so a missing key surfaced as
+    "SHAWZIFY hit an unexpected problem" with a traceback -- which blames the
+    engine for the caller's mistake and tells nobody anything useful.
+    """
+    reply = engine_process.call(request_id, method, params)
+    assert "error" in reply, reply
+    assert missing in reply["error"]["message"]
+    assert reply["error"]["code"] != "internal_error"
+
+
 def test_protocol_channel_is_never_polluted(engine_process, demo_midi):
     """A library printing to stdout would corrupt the JSON stream."""
     engine_process.call(80, "analyze", {"path": str(demo_midi), "useStems": False})

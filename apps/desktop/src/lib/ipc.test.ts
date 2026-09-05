@@ -178,8 +178,10 @@ describe('web transport health', () => {
 });
 
 describe('the one door to everything native', () => {
-  // Split so this file does not match its own search.
-  const needle = '@tauri-apps' + '/api';
+  // Split so this file does not match its own search. The whole scope is
+  // covered, not just /api: plugin-dialog is just as unavailable in a
+  // browser tab as convertFileSrc is.
+  const needle = '@tauri' + '-apps/';
 
   function sources(dir: string): string[] {
     return readdirSync(dir).flatMap((entry) => {
