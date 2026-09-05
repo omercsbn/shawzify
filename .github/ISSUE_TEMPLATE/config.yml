@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Troubleshooting guide
+    url: https://github.com/omercsbn/shawzify/blob/main/docs/troubleshooting.md
+    about: Setup, FFmpeg, GPU, links, the browser interface and in-game playback, with fixes.
+  - name: Security report
+    url: https://github.com/omercsbn/shawzify/security/advisories/new
+    about: Please report vulnerabilities privately rather than as a public issue.
+  - name: Questions and shared songs
+    url: https://github.com/omercsbn/shawzify/discussions
+    about: Ask how to get a better result, or post a song code you are proud of.

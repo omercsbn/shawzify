@@ -1,0 +1,67 @@
+name: Bad arrangement
+description: SHAWZIFY converted something and the result was wrong or unrecognisable
+labels: ["arrangement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This is the most useful report you can file. The engine is full of
+        musical judgement calls, and the only way to know one is wrong is to
+        hear it go wrong.
+
+        **Please do not attach copyrighted audio.** A link, or a description of
+        the track, is enough.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What went wrong
+      description: Be specific about the music — which part, and what happened to it.
+      placeholder: |
+        The chorus melody disappeared after 1:20 and only the bass line survived.
+        The verse was fine.
+    validations:
+      required: true
+
+  - type: input
+    id: source
+    attributes:
+      label: What you converted
+      description: A link, or the track name and where the file came from. No audio files please.
+      placeholder: https://www.youtube.com/watch?v=... (or "a 320kbps MP3 rip of ...")
+    validations:
+      required: true
+
+  - type: textarea
+    id: report
+    attributes:
+      label: The conversion report
+      description: |
+        Run `shawzify convert <your file> --json` and paste the output, or attach it.
+        It carries the settings, the scale choice, the compatibility breakdown and
+        the reason recorded for every changed note.
+      render: json
+
+  - type: textarea
+    id: settings
+    attributes:
+      label: Settings, if you did not attach a report
+      placeholder: |
+        Mode: Melody
+        Complexity: 55
+        Scale: Auto (it chose Pentatonic Minor)
+        Stem source: vocals
+        Transcriber: auto
+
+  - type: input
+    id: code
+    attributes:
+      label: The song code it produced
+      description: Optional, but it lets a maintainer hear exactly what you heard.
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Settings → Copy Debug Info produces this, with your home directory redacted.
+      render: json

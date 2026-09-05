@@ -1,0 +1,102 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Tests (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: engine/pyproject.toml
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+
+      - name: Create the engine environment
+        # The same path scripts/test.ps1 expects, so CI runs exactly what a
+        # contributor runs. The ML extras are deliberately left out: the suite
+        # must pass without PyTorch, since that is how most people install.
+        run: |
+          python -m venv engine/.venv
+          engine/.venv/Scripts/python.exe -m pip install --upgrade pip
+          engine/.venv/Scripts/python.exe -m pip install -e "engine[dev,audio,sources]"
+
+      - name: Install frontend dependencies
+        working-directory: apps/desktop
+        run: npm ci
+
+      - name: Build the frontend
+        # cargo test builds the Tauri crate, whose build script needs dist/.
+        working-directory: apps/desktop
+        run: npm run build
+
+      - name: Run every suite
+        run: ./scripts/test.ps1
+        shell: pwsh
+
+      - name: Check the CLI runs end to end
+        # A conversion that produces a valid song code exercises decode,
+        # analysis, arrangement and encoding in one go.
+        run: |
+          engine/.venv/Scripts/python.exe -m shawzify_engine.cli demo --out-dir assets/demo --quiet
+          engine/.venv/Scripts/python.exe -m shawzify_engine.cli convert assets/demo/demo.mid --no-write --json > conversion.json
+          engine/.venv/Scripts/python.exe -c "import json; r = json.load(open('conversion.json')); code = r['arrangement']['code']; print('code:', code[:48]); assert len(code) % 3 == 1"
+        shell: pwsh
+
+  lint-rust:
+    name: Clippy
+    runs-on: windows-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+
+      - name: Build the frontend
+        working-directory: apps/desktop
+        run: npm ci && npm run build
+
+      - name: Clippy
+        working-directory: apps/desktop/src-tauri
+        run: cargo clippy --all-targets -- -D warnings

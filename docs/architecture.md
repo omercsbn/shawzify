@@ -43,7 +43,8 @@ The React app runs unchanged in both:
 ```
 
 `lib/ipc.ts` picks the transport at runtime by looking for `__TAURI_INTERNALS__`
-or the token the web server injects into the page. Components never know which
+or the marker the web server injects into the page (the token comes from the
+page's own URL -- see below). Components never know which
 one they are on. Two features are desktop-only and say so rather than failing:
 live Warframe playback (Windows key injection, window focus) and native file
 dialogs (a browser cannot hand over a real path).

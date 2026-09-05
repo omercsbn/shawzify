@@ -1,0 +1,136 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build and release (must already exist)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    name: Windows installer
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: engine/pyproject.toml
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+
+      - name: Create the engine environment
+        run: |
+          python -m venv engine/.venv
+          engine/.venv/Scripts/python.exe -m pip install --upgrade pip
+          engine/.venv/Scripts/python.exe -m pip install -e "engine[dev,audio,sources]"
+
+      - name: Install frontend dependencies
+        working-directory: apps/desktop
+        run: npm ci
+
+      - name: Run every suite
+        # A release that fails its own tests is not a release.
+        run: ./scripts/test.ps1
+        shell: pwsh
+
+      - name: Build the installer
+        working-directory: apps/desktop
+        run: npm run tauri:build
+
+      - name: Collect the artefacts
+        id: collect
+        shell: pwsh
+        run: |
+          $bundle = 'apps/desktop/src-tauri/target/release/bundle'
+          $installer = Get-ChildItem -Recurse -File $bundle -Include *.exe, *.msi |
+            Sort-Object Length -Descending | Select-Object -First 1
+          if (-not $installer) { throw 'No installer was produced.' }
+
+          New-Item -ItemType Directory -Force dist-release | Out-Null
+          Copy-Item $installer.FullName dist-release/
+          $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLower()
+          "$hash  $($installer.Name)" | Out-File -Encoding ascii "dist-release/$($installer.Name).sha256"
+
+          "name=$($installer.Name)"    >> $env:GITHUB_OUTPUT
+          "sha256=$hash"               >> $env:GITHUB_OUTPUT
+          "size=$([math]::Round($installer.Length / 1MB, 1)) MB" >> $env:GITHUB_OUTPUT
+
+      - name: Write the release notes
+        id: notes
+        shell: pwsh
+        run: |
+          $tag = '${{ github.event.inputs.tag }}'
+          if (-not $tag) { $tag = '${{ github.ref_name }}' }
+          $notes = @"
+## Install
+
+Download ``${{ steps.collect.outputs.name }}`` below (${{ steps.collect.outputs.size }}) and run it.
+It installs for the current user only, so it needs no administrator rights.
+
+**The desktop app needs the engine.** SHAWZIFY's audio and arrangement work is
+done by a Python engine that is not bundled in the installer — the ML model
+weights alone would make it several gigabytes. After installing, clone this
+repository and run ``scripts\setup.ps1`` once; the app finds the engine
+automatically. The [README](https://github.com/${{ github.repository }}#readme)
+has the five-minute version.
+
+Prefer no installer at all? ``scripts\dev.ps1 -Cli web`` gives you the whole
+interface in a browser, and ``shawzify convert song.mp3`` gives you a song code
+without any interface.
+
+## Verify the download
+
+``````
+SHA256  ${{ steps.collect.outputs.sha256 }}
+``````
+
+## What changed
+
+See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/$tag/CHANGELOG.md).
+
+---
+
+SHAWZIFY is an independent fan project. It is not affiliated with, endorsed by,
+or connected to Digital Extremes. It sends ordinary keystrokes to a focused
+window and never touches the game process.
+"@
+          $notes | Out-File -Encoding utf8 release-notes.md
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $tag = '${{ steps.notes.outputs.tag }}'
+          $assets = Get-ChildItem dist-release -File | ForEach-Object { $_.FullName }
+          if (gh release view $tag 2>$null) {
+            gh release upload $tag $assets --clobber
+            gh release edit $tag --notes-file release-notes.md
+          } else {
+            gh release create $tag $assets --title "SHAWZIFY $tag" --notes-file release-notes.md
+          }

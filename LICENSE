@@ -22,10 +22,9 @@ SOFTWARE.
 
 ---
 
-SHAWZIFY is an independent fan-made tool and is not affiliated with or endorsed
-by Digital Extremes. Warframe and Shawzin are trademarks of Digital Extremes Ltd.
+SHAWZIFY is an independent fan project. It is not affiliated with, endorsed by,
+or connected to Digital Extremes Ltd. WARFRAME and the Shawzin are trademarks
+of Digital Extremes Ltd. No game assets are included in this repository.
 
-The Shawzin scale, chord and format tables in
-engine/shawzify_engine/shawzin/data/ describe publicly documented behaviour of a
-video game feature. They were cross-checked against the MIT-licensed projects
-credited in docs/research/existing-tools.md. No game assets are included.
+Third-party notices, including the licences of works this project studied or
+derived data from, are in THIRD-PARTY-NOTICES.md.

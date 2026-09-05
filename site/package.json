@@ -1,0 +1,15 @@
+{
+  "name": "shawzify-site",
+  "private": true,
+  "version": "0.1.0",
+  "description": "The SHAWZIFY landing page and documentation site",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "serve": "node build.mjs && node --run serve:only",
+    "serve:only": "npx --yes serve dist"
+  },
+  "dependencies": {
+    "markdown-it": "^14.1.0"
+  }
+}
