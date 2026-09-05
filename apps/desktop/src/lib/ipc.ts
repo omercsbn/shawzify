@@ -54,13 +54,24 @@ interface WebRuntime {
   version?: string;
 }
 
+/**
+ * Injected into the copy of the app published on the website.
+ *
+ * The engine is Python and cannot run on a static host, so the demo answers
+ * from a recording of a real conversion rather than pretending to convert.
+ */
+interface DemoRuntime {
+  data: string;
+}
+
 declare global {
   interface Window {
     __SHAWZIFY_WEB__?: WebRuntime;
+    __SHAWZIFY_DEMO__?: DemoRuntime;
   }
 }
 
-export type Transport = 'tauri' | 'web' | 'none';
+export type Transport = 'tauri' | 'web' | 'demo' | 'none';
 
 export function isTauri(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -68,6 +79,11 @@ export function isTauri(): boolean {
 
 export function isWeb(): boolean {
   return typeof window !== 'undefined' && Boolean(window.__SHAWZIFY_WEB__);
+}
+
+/** Running as the recorded demo published on the website. */
+export function isDemo(): boolean {
+  return typeof window !== 'undefined' && Boolean(window.__SHAWZIFY_DEMO__);
 }
 
 /**
@@ -80,6 +96,7 @@ export function isWeb(): boolean {
 export function transport(): Transport {
   if (isTauri()) return 'tauri';
   if (isWeb()) return 'web';
+  if (isDemo()) return 'demo';
   return 'none';
 }
 
@@ -259,6 +276,100 @@ async function webCall<T>(method: string, params: Record<string, unknown>): Prom
   return payload.result as T;
 }
 
+// -- the recorded demo ----------------------------------------------------
+
+interface DemoSession {
+  environment: unknown;
+  instrument: unknown;
+  keymap: unknown;
+  source: SourceDto;
+  arrangements: Record<string, ArrangementDto>;
+  structure: unknown;
+  shawzins: unknown;
+  sources?: unknown;
+  spotify?: unknown;
+  preview: { file: string; durationSeconds: number; sampleRate: number };
+}
+
+let demoSession: Promise<DemoSession> | null = null;
+
+function loadDemo(): Promise<DemoSession> {
+  if (!demoSession) {
+    const path = window.__SHAWZIFY_DEMO__?.data ?? 'demo/session.json';
+    demoSession = fetch(path).then((response) => {
+      if (!response.ok) throw new Error('demo data: HTTP ' + response.status);
+      return response.json() as Promise<DemoSession>;
+    });
+  }
+  return demoSession;
+}
+
+/** The demo cannot do this, and says so rather than failing quietly. */
+function demoUnavailable(what: string): never {
+  throw normalizeError({
+    code: 'demo_only',
+    message: what + ' needs the SHAWZIFY engine running on your own machine.',
+    hint: 'This page replays one real conversion so you can see what the interface does.',
+    technical: null,
+  });
+}
+
+async function demoCall<T>(method: string, params: Record<string, unknown>): Promise<T> {
+  const session = await loadDemo();
+  switch (method) {
+    case 'ping':
+      return { ok: true } as unknown as T;
+    case 'environment':
+      return session.environment as T;
+    case 'instrument':
+      return session.instrument as T;
+    case 'keymap':
+      return session.keymap as T;
+    case 'recents':
+      return { recents: [] } as unknown as T;
+    case 'sources':
+      return (session.sources ?? { providers: [] }) as T;
+    case 'spotifyCredentials':
+      return (session.spotify ?? { configured: false, clientId: '', available: false }) as T;
+    case 'analyze':
+      return session.source as unknown as T;
+    case 'arrange': {
+      const options = (params.options ?? {}) as { mode?: string };
+      const mode = options.mode && session.arrangements[options.mode] ? options.mode : 'balanced';
+      return session.arrangements[mode] as unknown as T;
+    }
+    case 'structure':
+      return session.structure as T;
+    case 'recommendShawzin':
+      return session.shawzins as T;
+    case 'preview':
+      // Relative to the page, like the recording itself: the demo is served
+      // from its own directory, so prefixing it again would look for
+      // demo/demo/preview.mp3.
+      return {
+        path: session.preview.file,
+        durationSeconds: session.preview.durationSeconds,
+        sampleRate: session.preview.sampleRate,
+      } as unknown as T;
+    case 'cancel':
+      return { cancelled: false } as unknown as T;
+    case 'diagnostics':
+      return { demo: true, note: 'Recorded from the bundled demo melody.' } as unknown as T;
+    case 'export':
+      return demoUnavailable('Saving files');
+    case 'identify':
+    case 'search':
+    case 'fetch':
+      return demoUnavailable('Fetching a link');
+    case 'openProject':
+      return demoUnavailable('Opening a project');
+    case 'clearCache':
+      return demoUnavailable('Clearing the cache');
+    default:
+      return demoUnavailable('That');
+  }
+}
+
 async function getBridge(): Promise<TauriBridge> {
   if (bridge) return bridge;
   if (!isTauri()) {
@@ -333,6 +444,21 @@ const DESKTOP_ONLY = new Set([
 ]);
 
 async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
+  if (!isTauri() && isDemo()) {
+    if (cmd === 'engine_call') {
+      const a = (args ?? {}) as { method: string; params?: Record<string, unknown> };
+      return demoCall<T>(a.method, a.params ?? {});
+    }
+    if (cmd === 'engine_status' || cmd === 'engine_start' || cmd === 'engine_restart') {
+      return { running: true, python: null, root: '', error: null } as unknown as T;
+    }
+    if (cmd === 'warframe_status') {
+      return { found: false, focused: false, title: null, supported: false } as unknown as T;
+    }
+    if (cmd === 'startup_file') return null as unknown as T;
+    if (cmd === 'live_is_playing') return false as unknown as T;
+    return demoUnavailable('That');
+  }
   if (!isTauri() && isWeb()) {
     if (cmd === 'engine_call') {
       const a = (args ?? {}) as { method: string; params?: Record<string, unknown> };
@@ -574,6 +700,8 @@ export const engine = {
 
 /** A URL the page can play, for a file the engine produced. */
 export async function mediaUrl(path: string): Promise<string> {
+  // The demo's audio is published beside the page, so the path is the URL.
+  if (isDemo() && !isTauri()) return path;
   if (isTauri()) {
     const { convertFileSrc } = await import('@tauri-apps/api/core');
     return convertFileSrc(path);

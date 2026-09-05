@@ -8,6 +8,7 @@
   </p>
   <div class="cta">
     <a class="btn btn-primary" href="https://github.com/omercsbn/shawzify/releases/latest" target="_blank" rel="noopener">Download for Windows</a>
+    <a class="btn" href="demo/">Try the interface</a>
     <a class="btn" href="docs/readme.html">Read the docs</a>
     <a class="btn" href="https://github.com/omercsbn/shawzify" target="_blank" rel="noopener">View the source</a>
   </div>
@@ -15,8 +16,10 @@
 </div>
 
 <figure class="shot">
+  <a href="demo/" aria-label="Open the interactive demo">
   <img src="screenshots/workspace.png" alt="The SHAWZIFY workspace: the waveform of a track, a piano roll of the arrangement, a compatibility breakdown showing 44% rising to 82%, and the detected song structure with its hook." width="1456" height="959">
-  <figcaption>Every note is coloured by what happened to it: played as written, moved to fit, folded into a Shawzin chord, arpeggiated, or removed.</figcaption>
+  </a>
+  <figcaption>Every note is coloured by what happened to it: played as written, moved to fit, folded into a Shawzin chord, arpeggiated, or removed. <a href="demo/">Open it and have a look</a> — that is the real interface, replaying a real conversion.</figcaption>
 </figure>
 
 <section class="band">
@@ -122,7 +125,7 @@
       <p>A Tauri window with the waveform, the piano roll, the controls and in-game playback. Drag a file onto it and go.</p>
     </div>
     <div class="card">
-      <span class="tag">Browser</span>
+      <span class="tag">Browser · <a href="demo/">demo</a></span>
       <h3><code>shawzify web</code></h3>
       <p>The same interface, served to a browser tab from <code>127.0.0.1</code> with a token. Drop a file on it, download every export, no installer and no Rust toolchain. Only in-game playback is desktop-only.</p>
     </div>

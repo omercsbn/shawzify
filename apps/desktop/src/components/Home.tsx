@@ -31,6 +31,7 @@ export function Home() {
     openFile,
     openProject,
     openUploaded,
+    toast,
     dropHover,
     setDropHover,
     environment,
@@ -46,8 +47,22 @@ export function Home() {
   const fileInput = useRef<HTMLInputElement>(null);
   const projectInput = useRef<HTMLInputElement>(null);
   const web = transport === 'web';
+  const demo = transport === 'demo';
+
+  // The published demo has a recording, not an engine; a dialog it cannot
+  // honour is worse than a sentence saying so.
+  const explainDemo = () =>
+    toast(
+      'info',
+      'This is a recorded demo — it cannot open your files.',
+      'Install SHAWZIFY to convert your own music: github.com/omercsbn/shawzify',
+    );
 
   const pick = async () => {
+    if (demo) {
+      explainDemo();
+      return;
+    }
     if (web) {
       fileInput.current?.click();
       return;
@@ -57,6 +72,10 @@ export function Home() {
   };
 
   const pickProject = async () => {
+    if (demo) {
+      explainDemo();
+      return;
+    }
     if (web) {
       projectInput.current?.click();
       return;

@@ -21,7 +21,7 @@ import type {
   WarframeStatus,
 } from '@shawzify/shared-types';
 
-import type { Connection } from '@/lib/ipc';
+import type { Connection, Transport } from '@/lib/ipc';
 import {
   ShawzifyError,
   connectionState,
@@ -68,7 +68,7 @@ interface AppStore {
   recents: RecentProject[];
   providers: ProviderInfo[];
   spotify: SpotifyCredentialsDto | null;
-  transport: 'tauri' | 'web' | 'none';
+  transport: Transport;
   /** Web transport only: whether the local server is still reachable. */
   connection: Connection;
   engineReady: boolean;
@@ -164,6 +164,9 @@ export const useStore = create<AppStore>((set, get) => ({
   engineReady: false,
   engineMessage: null,
   onboarded: (() => {
+    // The published demo has nothing to set up, and a visitor who clicked
+    // "try it" wants the interface, not a checklist about their own machine.
+    if (transport() === 'demo') return true;
     try {
       return localStorage.getItem('shawzify.onboarded') === '1';
     } catch {

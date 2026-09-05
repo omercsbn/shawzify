@@ -53,3 +53,6 @@ desktop.ini
 *.swp
 .hypothesis/
 conversion.json
+
+# Built site output (site/public/demo/ is a committed recording, not output)
+site/dist/

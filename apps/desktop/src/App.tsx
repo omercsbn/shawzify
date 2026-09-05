@@ -85,6 +85,36 @@ function ConnectionBanner() {
   );
 }
 
+/**
+ * The website publishes this app with a recording instead of an engine.
+ *
+ * Saying so once, permanently, is the difference between a demo and a lie:
+ * mode switching is genuinely re-rendered from four real arrangements, but
+ * nothing here is converting anything.
+ */
+function DemoBanner() {
+  const { transport } = useStore();
+  if (transport !== 'demo') return null;
+  return (
+    <div className="shrink-0 flex items-center gap-3 px-4 py-2 border-b border-amber/25 bg-amber/[0.08]">
+      <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-amber" />
+      <p className="flex-1 text-xs text-paper-dim">
+        <span className="text-amber-bright font-medium">Demo.</span> One real conversion of the
+        bundled demo melody, recorded and replayed. Switch modes and explore the arrangement —
+        converting your own music needs the app on your machine.
+      </p>
+      <a
+        className="btn-quiet h-6 px-2 text-2xs"
+        href="https://github.com/omercsbn/shawzify/releases/latest"
+        target="_blank"
+        rel="noopener"
+      >
+        Get SHAWZIFY
+      </a>
+    </div>
+  );
+}
+
 function Toasts() {
   const { toasts, dismissToast } = useStore();
   return (
@@ -142,12 +172,28 @@ function Toasts() {
 }
 
 export default function App() {
-  const { view, bootstrap, openFile, openProject, setDropHover, refreshWarframe, onboarded } =
-    useStore();
+  const {
+    view,
+    bootstrap,
+    openFile,
+    openProject,
+    setDropHover,
+    refreshWarframe,
+    onboarded,
+    transport,
+    source,
+  } = useStore();
 
   useEffect(() => {
     void bootstrap();
   }, [bootstrap]);
+
+  // The demo has one recording and nothing to choose, so open it immediately
+  // rather than showing an empty state whose buttons cannot work.
+  useEffect(() => {
+    if (transport === 'demo' && !source) void openFile('demo');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transport]);
 
   // Files dropped on the window arrive through Tauri, not the DOM.
   useEffect(() => {
@@ -177,6 +223,7 @@ export default function App() {
   return (
     <div className="h-full flex flex-col bg-ink-900">
       <TopBar />
+      <DemoBanner />
       <ConnectionBanner />
       <main className="flex-1 min-h-0 relative">
         {view === 'settings' ? (

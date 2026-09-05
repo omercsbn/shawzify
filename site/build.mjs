@@ -6,6 +6,7 @@
  * docs/ so the site cannot drift from the repository. Only links need fixing:
  * a relative `.md` link that works on GitHub has to become a `.html` link here.
  */
+import { execFileSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -229,6 +230,44 @@ for (const page of PAGES) {
   rendered += 1;
 }
 
+// -- the playable demo ----------------------------------------------------
+
+/**
+ * Publish the real interface next to the landing page.
+ *
+ * The engine is Python and cannot run on a static host, so the app is built
+ * with a marker that routes every engine call to a recording of one genuine
+ * conversion (scripts/build_demo_fixture.py made it, using the engine). The
+ * alternative — a screenshot captioned "imagine clicking this" — tells a
+ * visitor nothing about whether the thing works.
+ */
+function buildDemo() {
+  const app = join(root, 'apps', 'desktop');
+  const fixture = join(here, 'public', 'demo', 'session.json');
+  if (!existsSync(fixture)) {
+    console.warn('  no demo recording; skipping the demo (run scripts/build_demo_fixture.py)');
+    return false;
+  }
+
+  // Relative asset paths: the demo lives under /shawzify/demo/, not at a root.
+  execFileSync('npm', ['run', 'build', '--', '--base=./'], {
+    cwd: app,
+    stdio: 'inherit',
+    shell: process.platform === 'win32',
+  });
+
+  const built = join(app, 'dist');
+  const target = join(out, 'demo');
+  cpSync(built, target, { recursive: true });
+
+  const page = join(target, 'index.html');
+  const marker = '<script>window.__SHAWZIFY_DEMO__={data:"session.json"};</script>';
+  writeFileSync(page, readFileSync(page, 'utf-8').replace('</head>', marker + '</head>'));
+  return true;
+}
+
+const demoBuilt = process.env.SHAWZIFY_SKIP_DEMO ? false : buildDemo();
+
 cpSync(join(here, 'src', 'styles.css'), join(out, 'styles.css'));
 cpSync(join(here, 'src', 'favicon.svg'), join(out, 'favicon.svg'));
 if (existsSync(join(here, 'public'))) cpSync(join(here, 'public'), out, { recursive: true });
@@ -238,4 +277,8 @@ const shots = join(root, 'assets', 'screenshots');
 if (existsSync(shots)) cpSync(shots, join(out, 'screenshots'), { recursive: true });
 writeFileSync(join(out, '.nojekyll'), '');
 
-console.log(`Built the landing page and ${rendered} documentation pages into site/dist.`);
+console.log(
+  `Built the landing page, ${rendered} documentation pages` +
+    (demoBuilt ? ' and the playable demo' : '') +
+    ' into site/dist.',
+);
