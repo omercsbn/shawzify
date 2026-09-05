@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 
-import { ShawzifyError, engine } from '@/lib/ipc';
+import { ShawzifyError, engine, mediaUrl } from '@/lib/ipc';
 import { useStore } from '@/state/store';
 import { Analyzing } from './Analyzing';
 import { Compatibility } from './Compatibility';
@@ -47,8 +47,7 @@ function useAudioPreview() {
     setReady(false);
     try {
       const rendered = await engine.preview(sourceId);
-      const { convertFileSrc } = await import('@tauri-apps/api/core');
-      audio.src = convertFileSrc(rendered.path);
+      audio.src = await mediaUrl(rendered.path);
       audio.load();
       setReady(true);
     } finally {

@@ -5,6 +5,9 @@
  * page was open, and the browser's own EventSource retry hammered the dead port
  * every few seconds forever while the interface still looked healthy.
  */
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { join, relative } from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Connection } from '@/lib/ipc';
@@ -171,5 +174,34 @@ describe('web transport health', () => {
     await ipc.engine.analyze('song.wav', {}, { onProgress: (p) => stages.push(p.stage) });
 
     expect(stages).toEqual(['decode']);
+  });
+});
+
+describe('the one door to everything native', () => {
+  // Split so this file does not match its own search.
+  const needle = '@tauri-apps' + '/api';
+
+  function sources(dir: string): string[] {
+    return readdirSync(dir).flatMap((entry) => {
+      const full = join(dir, entry);
+      if (statSync(full).isDirectory()) return sources(full);
+      return /\.tsx?$/.test(entry) ? [full] : [];
+    });
+  }
+
+  it('is lib/ipc.ts, and nothing else imports Tauri', () => {
+    // Workspace once called convertFileSrc itself, which meant its audio
+    // preview worked in the desktop shell and threw "Cannot read properties
+    // of undefined" in the browser. mediaUrl() knows about both transports;
+    // every other native call has an equivalent reason to go through here.
+    // jsdom serves modules over http, so import.meta.url is not a file URL;
+    // vitest runs from apps/desktop.
+    const root = join(process.cwd(), 'src');
+    const offenders = sources(root)
+      .filter((file) => !file.endsWith(join('lib', 'ipc.ts')))
+      .filter((file) => readFileSync(file, 'utf-8').includes(needle))
+      .map((file) => relative(root, file).replace(/\\/g, '/'));
+
+    expect(offenders).toEqual([]);
   });
 });

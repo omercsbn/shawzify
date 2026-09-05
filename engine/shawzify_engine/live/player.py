@@ -97,6 +97,7 @@ class PlaybackStatus:
 
 StatusCallback = Callable[[PlaybackStatus], None]
 FocusCheck = Callable[[], bool]
+WindowCheck = Callable[[], WindowInfo]
 
 
 class ShawzinLivePlayer:
@@ -109,13 +110,15 @@ class ShawzinLivePlayer:
         keymap: WarframeKeymap | None = None,
         instrument: ShawzinInstrument | None = None,
         focus_check: FocusCheck | None = None,
+        window_check: WindowCheck | None = None,
         scheduler: EventScheduler | None = None,
         require_focus: bool = True,
     ) -> None:
         self.sink = sink or select_sink()
         self.keymap = keymap or WarframeKeymap.load()
         self.instrument = instrument or default_instrument()
-        self.focus_check = focus_check or (lambda: find_warframe_window().focused)
+        self.window_check = window_check or find_warframe_window
+        self.focus_check = focus_check or (lambda: self.window_check().focused)
         self.scheduler = scheduler or EventScheduler()
         self.require_focus = require_focus
         self._stop = threading.Event()
@@ -137,7 +140,7 @@ class ShawzinLivePlayer:
 
     def preflight(self) -> dict[str, Any]:
         """What the UI needs to decide whether PLAY IN WARFRAME can be offered."""
-        window = find_warframe_window()
+        window = self.window_check()
         problems = self.keymap.validate()
         return {
             "window": window.to_dict(),

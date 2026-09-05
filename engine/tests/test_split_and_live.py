@@ -13,7 +13,7 @@ from shawzify_engine.live.mic import (
     map_frames,
     nearest_playable,
 )
-from shawzify_engine.live.player import ShawzinLivePlayer, dry_run
+from shawzify_engine.live.player import ShawzinLivePlayer, WindowInfo, dry_run
 from shawzify_engine.live.scheduler import EventScheduler, ScheduledEvent
 from shawzify_engine.music.pitch import midi_to_hz
 from shawzify_engine.shawzin.songcode import ShawzinEvent, ShawzinSong, decode, encode
@@ -331,12 +331,39 @@ def test_player_releases_frets_when_stopped(instrument):
 
 
 def test_preflight_reports_what_is_missing(instrument):
+    """Warframe running but not focused must not be offered as playable.
+
+    preflight() used to call the real window lookup, so this test passed or
+    failed depending on which window happened to be in front of the machine
+    running it -- and it said nothing about the code.
+    """
     player = ShawzinLivePlayer(
         sink=RecordingInputSink(), keymap=WarframeKeymap(),
         instrument=instrument, focus_check=lambda: False,
+        window_check=lambda: WindowInfo(True, False, "Warframe", 1234),
     )
     info = player.preflight()
-    assert "window" in info
+    assert info["window"]["found"] is True
+    assert info["canPlay"] is False
+
+
+def test_preflight_offers_playback_when_warframe_is_focused(instrument):
+    player = ShawzinLivePlayer(
+        sink=RecordingInputSink(), keymap=WarframeKeymap(),
+        instrument=instrument, focus_check=lambda: True,
+        window_check=lambda: WindowInfo(True, True, "Warframe", 1234),
+    )
+    assert player.preflight()["canPlay"] is True
+
+
+def test_preflight_says_no_when_warframe_is_not_running(instrument):
+    player = ShawzinLivePlayer(
+        sink=RecordingInputSink(), keymap=WarframeKeymap(),
+        instrument=instrument, focus_check=lambda: False,
+        window_check=lambda: WindowInfo(False, False),
+    )
+    info = player.preflight()
+    assert info["window"]["found"] is False
     assert info["canPlay"] is False
 
 
