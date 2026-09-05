@@ -36,8 +36,16 @@ export function Export({
   arrangement: ArrangementDto;
   source: SourceDto;
 }) {
-  const { toast, warframe, keymap, liveActive, setLiveActive, liveCountdown, setLiveCountdown } =
-    useStore();
+  const {
+    toast,
+    warframe,
+    keymap,
+    liveActive,
+    setLiveActive,
+    liveCountdown,
+    setLiveCountdown,
+    transport,
+  } = useStore();
   const [copied, setCopied] = useState(false);
   const [tick, setTick] = useState<{ fret: string; string: string; index: number } | null>(null);
   const [selectedPart, setSelectedPart] = useState(0);
@@ -103,6 +111,15 @@ export function Export({
 
   const exportAs = async (kind: string, name: string, extensions: string[]) => {
     try {
+      if (transport === 'web') {
+        // A browser cannot name a path, so the engine writes into its own
+        // cache and the page downloads it. Without this every export button
+        // did nothing at all here, silently.
+        const written = await engine.export(arrangement.sourceId, kind);
+        await system.downloadFromCache(written.path, name);
+        toast('success', `Downloaded ${name}`);
+        return;
+      }
       const path = await system.pickSavePath(name, extensions);
       if (!path) return;
       const written = await engine.export(arrangement.sourceId, kind, path);

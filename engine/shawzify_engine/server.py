@@ -415,6 +415,28 @@ def m_preview(params: dict[str, Any], _request_id: int) -> dict[str, Any]:
     }
 
 
+_EXPORT_SUFFIXES = {
+    "code": ".shawzin.txt",
+    "midi": ".arranged.mid",
+    "sourceMidi": ".source.mid",
+    "preview": ".preview.wav",
+    "analysis": ".analysis.json",
+    "project": ".shawzify",
+}
+
+
+def _export_cache_path(source_id: str, kind: str) -> Path:
+    """Where an export goes when the caller cannot name a path."""
+    from .common.paths import cache_dir
+    from .sources.base import safe_filename
+
+    source = SESSION.sources.get(source_id)
+    title = safe_filename(getattr(source, "title", None) or "shawzify")
+    directory = Path(cache_dir()) / "exports"
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory / (title + _EXPORT_SUFFIXES.get(kind, ".txt"))
+
+
 def m_export(params: dict[str, Any], _request_id: int) -> dict[str, Any]:
     from .common.safety import safe_output_path
     from .midi.writer import write_midi
@@ -423,7 +445,14 @@ def m_export(params: dict[str, Any], _request_id: int) -> dict[str, Any]:
 
     source_id = _required(params, "sourceId")
     kind = _required(params, "kind")
-    target = safe_output_path(_required(params, "path"))
+    requested = params.get("path")
+    if requested:
+        target = safe_output_path(requested)
+    else:
+        # No path: the caller is a browser, which cannot choose one. Write into
+        # SHAWZIFY's own cache, which is the only place the web server will
+        # serve a file back from.
+        target = _export_cache_path(source_id, str(kind))
     source = SESSION.sources.get(source_id)
     arrangement = SESSION.arrangements.get(source_id)
     if source is None or arrangement is None:

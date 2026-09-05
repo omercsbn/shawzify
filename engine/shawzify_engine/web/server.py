@@ -21,6 +21,7 @@ addition rather than another framework to install.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import mimetypes
 import os
@@ -47,6 +48,8 @@ _FRONTEND_CANDIDATES = (
 )
 
 _MAX_BODY_BYTES = 4 * 1024 * 1024
+#: Uploads are whole songs, so they need their own, much larger, ceiling.
+_MAX_UPLOAD_BYTES = 256 * 1024 * 1024
 
 
 def find_frontend(root: Path | None = None) -> Path | None:
@@ -227,7 +230,8 @@ class Handler(BaseHTTPRequestHandler):
             self.close_connection = True
             self._send_json(HTTPStatus.BAD_REQUEST, {"error": {"message": "Malformed request."}})
             return
-        if length > _MAX_BODY_BYTES:
+        limit = _MAX_UPLOAD_BYTES if parsed.path == "/api/upload" else _MAX_BODY_BYTES
+        if length > limit:
             # Draining megabytes to stay polite is worse than hanging up.
             self.close_connection = True
             self._send_json(
@@ -241,6 +245,10 @@ class Handler(BaseHTTPRequestHandler):
             return
         if not self._origin_ok() or not self._authorised(query):
             self._send_json(HTTPStatus.FORBIDDEN, {"error": {"message": "Not authorised."}})
+            return
+
+        if parsed.path == "/api/upload":
+            self._receive_upload(raw)
             return
 
         try:
@@ -327,6 +335,51 @@ class Handler(BaseHTTPRequestHandler):
         content_type = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
         data = target.read_bytes()
         self._send_bytes(HTTPStatus.OK, data, content_type)
+
+    def _receive_upload(self, raw: bytes) -> None:
+        """Take a file the browser handed over and put it where the engine can read it.
+
+        A browser cannot give a page a real path, so without this the web
+        interface can only ever open a link -- every "choose a file" button is
+        dead. The bytes land in SHAWZIFY's own cache under a sanitised name,
+        and only if the extension is one the engine actually handles.
+        """
+        from ..common.paths import cache_dir
+        from ..common.safety import AUDIO_EXTENSIONS, MIDI_EXTENSIONS, sanitize_metadata_text
+
+        if not raw:
+            self._send_json(HTTPStatus.BAD_REQUEST, {"error": {"message": "The upload was empty."}})
+            return
+
+        name = sanitize_metadata_text(self.headers.get("X-Shawzify-Filename") or "upload", max_length=120)
+        name = os.path.basename(name.replace("\\", "/"))
+        suffix = Path(name).suffix.lower()
+        allowed = AUDIO_EXTENSIONS | MIDI_EXTENSIONS | {".shawzify"}
+        if suffix not in allowed:
+            self._send_json(
+                HTTPStatus.BAD_REQUEST,
+                {
+                    "error": {
+                        "message": "SHAWZIFY does not open '" + (suffix or name) + "' files.",
+                        "hint": "Audio, MIDI and .shawzify projects.",
+                    }
+                },
+            )
+            return
+
+        stem = Path(name).stem or "upload"
+        digest = hashlib.sha256(raw).hexdigest()[:16]
+        directory = Path(cache_dir()) / "uploads"
+        directory.mkdir(parents=True, exist_ok=True)
+        target = directory / (stem + "-" + digest + suffix)
+        if not target.exists():
+            target.write_bytes(raw)
+
+        self.app.log.event("web.upload", name=name, bytes=len(raw))
+        self._send_json(
+            HTTPStatus.OK,
+            {"result": {"path": str(target), "name": name, "bytes": len(raw)}},
+        )
 
     def _serve_static(self, path: str) -> None:
         root = self.app.frontend

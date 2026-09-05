@@ -67,6 +67,12 @@ app. `--new-token` rotates it. Refusals read their request body before
 answering: on a kept-alive connection an unread body becomes the next request
 line, so one unauthorised call would otherwise break every call after it.
 
+A browser also cannot do two things the desktop shell takes for granted: hand
+the engine a path, or write a file. So `/api/upload` takes the bytes and stores
+them in the cache, and an export with no path is written into the cache and
+fetched back through `/media`. Both stay inside the one directory the server
+will serve from.
+
 The browser transport also has a failure the desktop one does not: its server
 can be stopped while a page stays open. `EventSource` would then retry the dead
 port every few seconds forever, silently, so `lib/ipc.ts` owns the retry

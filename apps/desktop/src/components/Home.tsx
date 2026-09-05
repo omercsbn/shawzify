@@ -1,5 +1,6 @@
 /** The empty state: drop a song, or reopen a recent one. */
 
+import { useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useStore } from '@/state/store';
 import { system } from '@/lib/ipc';
@@ -21,22 +22,91 @@ function Logo({ size = 40 }: { size?: number }) {
   );
 }
 
+const BROWSER_ACCEPT =
+  '.wav,.mp3,.flac,.m4a,.ogg,.opus,.aac,.aiff,.wma,.mid,.midi,.shawzify,audio/*';
+
 export function Home() {
-  const { recents, openFile, openProject, dropHover, environment, engineReady, engineMessage } =
-    useStore();
+  const {
+    recents,
+    openFile,
+    openProject,
+    openUploaded,
+    dropHover,
+    setDropHover,
+    environment,
+    engineReady,
+    engineMessage,
+    transport,
+  } = useStore();
+
+  // A browser tab has no native file dialog and cannot produce a real path, so
+  // it uses a file input and uploads instead. Both buttons used to call
+  // pickFile(), which returns null outside the desktop shell -- so in a
+  // browser they did nothing at all, without saying why.
+  const fileInput = useRef<HTMLInputElement>(null);
+  const projectInput = useRef<HTMLInputElement>(null);
+  const web = transport === 'web';
 
   const pick = async () => {
+    if (web) {
+      fileInput.current?.click();
+      return;
+    }
     const path = await system.pickFile('media');
     if (path) void openFile(path);
   };
 
   const pickProject = async () => {
+    if (web) {
+      projectInput.current?.click();
+      return;
+    }
     const path = await system.pickFile('project');
     if (path) void openProject(path);
   };
 
+  const onChosen = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (file) void openUploaded(file);
+  };
+
+  // The desktop shell gets drops through Tauri; a browser has to use the DOM.
+  const onDrop = (event: React.DragEvent) => {
+    if (!web) return;
+    event.preventDefault();
+    setDropHover(false);
+    const file = event.dataTransfer.files?.[0];
+    if (file) void openUploaded(file);
+  };
+
+  const onDragOver = (event: React.DragEvent) => {
+    if (!web) return;
+    event.preventDefault();
+    setDropHover(true);
+  };
+
   return (
-    <div className="h-full flex flex-col items-center justify-center px-8 relative">
+    <div
+      className="h-full flex flex-col items-center justify-center px-8 relative"
+      onDrop={onDrop}
+      onDragOver={onDragOver}
+      onDragLeave={() => web && setDropHover(false)}
+    >
+      <input
+        ref={fileInput}
+        type="file"
+        accept={BROWSER_ACCEPT}
+        className="hidden"
+        onChange={onChosen}
+      />
+      <input
+        ref={projectInput}
+        type="file"
+        accept=".shawzify"
+        className="hidden"
+        onChange={onChosen}
+      />
       <AnimatePresence>
         {dropHover && (
           <motion.div
