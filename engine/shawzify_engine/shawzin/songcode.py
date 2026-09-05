@@ -27,7 +27,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..common.errors import SongCodeError
+from ..common.errors import InstrumentConstraintError, SongCodeError
 from .instrument import ShawzinInstrument, default_instrument
 
 ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
@@ -322,7 +322,10 @@ def decode(code: str, instrument: ShawzinInstrument | None = None) -> ShawzinSon
     scale_char = cleaned[0]
     try:
         scale = inst.scale_by_code(scale_char)
-    except KeyError as exc:
+    except (KeyError, InstrumentConstraintError) as exc:
+        # A scale the instrument does not have is an instrument problem in
+        # general, but inside a song code it is a song-code problem, and that
+        # is what the caller is trying to read.
         raise SongCodeError(
             "That song code uses a scale SHAWZIFY does not know (" + repr(scale_char) + ").",
             technical=str(exc),

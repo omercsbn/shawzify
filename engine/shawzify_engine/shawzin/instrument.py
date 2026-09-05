@@ -25,6 +25,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from ..common.errors import InstrumentConstraintError
 from ..music.pitch import note_name, pitch_class
 
 DATA_PATH = Path(__file__).with_name("data") / "shawzin_instrument.json"
@@ -319,13 +320,21 @@ class ShawzinInstrument:
         try:
             return self._scales[scale_id]
         except KeyError as exc:
-            raise KeyError("Unknown Shawzin scale: " + str(scale_id)) from exc
+            # This reaches users directly: `--scale klingon` used to surface as
+            # KeyError with a traceback rather than the list of real scales.
+            raise InstrumentConstraintError(
+                "The Shawzin has no scale called '" + str(scale_id) + "'.",
+                hint="Available scales: " + ", ".join(self.scale_ids) + ".",
+            ) from exc
 
     def scale_by_code(self, code: str) -> ShawzinScale:
         for s in self._scales.values():
             if s.code == str(code):
                 return s
-        raise KeyError("Unknown Shawzin scale code: " + str(code))
+        raise InstrumentConstraintError(
+            "No Shawzin scale uses the code '" + str(code) + "'.",
+            hint="A song code's first character selects the scale.",
+        )
 
     # -- variants -------------------------------------------------------
 

@@ -403,3 +403,49 @@ def test_cli_dry_run_live(tmp_path, midi_file, twinkle, capsys):
     out = capsys.readouterr().out
     assert "key presses" in out
     assert "timing error" in out
+
+
+# -- input a real user produces by accident -------------------------------
+
+
+def test_a_non_ascii_filename_survives_a_legacy_console(tmp_path, midi_file, twinkle, capsys):
+    """A Turkish or Japanese filename must not kill a finished conversion.
+
+    Windows gives the console a legacy code page -- cp1254 on this machine --
+    and Python honours it, so printing `şarkı — 音楽.mid` raised
+    UnicodeEncodeError *after* the arrangement was done. The conversion
+    succeeded and looked like a crash.
+    """
+    from shawzify_engine.common.console import use_utf8
+
+    source = tmp_path / "şarkı — 音楽 (test).mid"
+    source.write_bytes(midi_file(twinkle).read_bytes())
+
+    use_utf8()
+    assert main(["convert", str(source), "--no-write"]) == 0
+    assert "şarkı" in capsys.readouterr().out
+
+
+def test_an_empty_song_code_is_refused_clearly(capsys):
+    """`decode ""` treated the empty string as a path and died inside pathlib."""
+    assert main(["decode", ""]) != 0
+    reported = capsys.readouterr().err
+    assert "song code" in reported.lower()
+    assert "Traceback" not in reported
+
+
+def test_an_unknown_scale_lists_the_real_ones(instrument):
+    """`--scale klingon` reached the user as KeyError: 'klingon'."""
+    from shawzify_engine.common.errors import ShawzifyError
+
+    with pytest.raises(ShawzifyError) as caught:
+        instrument.scale("klingon")
+    assert "klingon" in str(caught.value)
+    assert instrument.scale_ids[0] in (caught.value.hint or "")
+
+
+def test_an_unknown_scale_code_is_not_a_keyerror(instrument):
+    from shawzify_engine.common.errors import ShawzifyError
+
+    with pytest.raises(ShawzifyError):
+        instrument.scale_by_code("~")

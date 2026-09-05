@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from .arrangement.options import AUTO, ArrangementMode, ArrangementOptions, Focus, StemSource
+from .common.console import use_utf8
 from .common.errors import ShawzifyError
 from .common.progress import ProgressEvent, ProgressReporter
 from .version import APP_VERSION
@@ -560,7 +561,12 @@ def cmd_decode(args: argparse.Namespace) -> int:
     from .shawzin.tab import render_grid, render_tab
 
     instrument = load_instrument(args.shawzin)
-    code = args.code
+    code = (args.code or "").strip()
+    if not code:
+        raise ShawzifyError(
+            "No song code was given.",
+            hint="Pass a code, or the path of a file containing one.",
+        )
     if Path(code).exists():
         code = Path(code).read_text(encoding="utf-8").strip().splitlines()[-1].strip()
     info = describe(code, instrument)
@@ -815,6 +821,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    # Filenames and song titles are not ASCII, and a Windows console defaults
+    # to a legacy code page that cannot encode them.
+    use_utf8()
+
     parser = build_parser()
     args = parser.parse_args(argv)
     # ``parents`` gives each subparser its own defaults for the shared flags,

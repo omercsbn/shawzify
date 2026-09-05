@@ -44,6 +44,13 @@ _CHANNEL_IN: io.RawIOBase | None = None
 _CHANNEL_OUT: io.RawIOBase | None = None
 
 
+def _use_utf8_output() -> None:
+    """Log lines carry song titles; the console's code page may not."""
+    from .common.console import use_utf8
+
+    use_utf8()
+
+
 def claim_channels():
     """Take exclusive ownership of stdin/stdout, then hide them from Python.
 
