@@ -26,6 +26,7 @@ export const sourceFixture: SourceDto = {
     runnerUp: 'A Minor',
   },
   transcriptionBackend: 'basic_pitch',
+  transcriptionTrust: { confidence: 0.62, notesPerSecond: 2.4, label: 'good' },
   stemUsed: 'vocals',
   contentHash: 'abc123def456',
   warnings: [],

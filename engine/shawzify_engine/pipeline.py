@@ -30,6 +30,7 @@ from .midi.reader import MidiFileData, choose_melody_track, parse_midi
 from .music.cleanup import clean_transcription
 from .music.events import NoteEvent
 from .music.key import KeyEstimate, estimate_key
+from .music.trust import TranscriptionTrust, assess_transcription
 from .shawzin.instrument import load_instrument
 from .stems import StemSet, select_separator
 from .transcription import select_transcriber
@@ -56,6 +57,7 @@ class SourceMaterial:
     bpm_confidence: float = 0.0
     stems: StemSet | None = None
     transcription_backend: str = ""
+    trust: TranscriptionTrust | None = None
     stem_used: str = ""
     content_hash: str = ""
     warnings: list[str] = field(default_factory=list)
@@ -70,6 +72,7 @@ class SourceMaterial:
             "bpmConfidence": round(self.bpm_confidence, 3),
             "key": self.key.to_dict() if self.key else None,
             "transcriptionBackend": self.transcription_backend,
+            "transcriptionTrust": self.trust.to_dict() if self.trust else None,
             "stemUsed": self.stem_used,
             "contentHash": self.content_hash[:16],
             "warnings": self.warnings,
@@ -158,6 +161,7 @@ def load_source(
         key = estimate_key(events) if events else None
         return SourceMaterial(
             kind="midi",
+            trust=assess_transcription(events, data.duration, kind="midi"),
             path=str(resolved),
             title=data.title,
             duration=data.duration,
@@ -323,6 +327,15 @@ def load_source(
             "very quiet, or heavily processed."
         )
 
+    # The compatibility score cannot tell a faithful arrangement of the
+    # wrong notes from a faithful arrangement of the right ones. Say which
+    # this is, in its own words, rather than folding it into that number.
+    trust = assess_transcription(events, buffer.duration, kind="audio")
+    note = trust.note()
+    if note:
+        warnings.append(note)
+    log.event("transcription.trust", label=trust.label, confidence=round(trust.confidence, 3))
+
     key = estimate_key(events) if events else None
     if key is None or key.confidence < 0.25:
         # Fall back to the spectral key estimate when the note-based one is weak.
@@ -332,6 +345,7 @@ def load_source(
 
     return SourceMaterial(
         kind="audio",
+        trust=trust,
         path=str(resolved),
         title=buffer.metadata.title or resolved.stem,
         duration=buffer.duration,
