@@ -152,7 +152,10 @@ file ─▶ decode ─▶ waveform ─┐
 
 Everything left of `arrange` is cached by audio content hash. That is the split
 that makes the arrangement controls feel instant: dragging the Complexity slider
-re-runs `arrange` (tens of milliseconds) and nothing else.
+re-runs `arrange` and nothing else. Measured at 670 ms for a 2,000-note song,
+which is the number to watch: it was 460 ms before transcription cleaning and
+melody tracking were added, and the stage has to stay fast enough to feel like
+a slider rather than a job.
 
 Cache keys include the algorithm version and only the settings that stage
 actually depends on, so changing the arrangement mode never invalidates stems.
