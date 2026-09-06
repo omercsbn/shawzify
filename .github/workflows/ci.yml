@@ -71,6 +71,10 @@ jobs:
           engine/.venv/Scripts/python.exe scripts/check_conversion.py conversion.json
         shell: pwsh
 
+      - name: Check the website's demo is not replaying an older engine
+        run: engine/.venv/Scripts/python.exe scripts/check_demo_fixture.py
+        shell: pwsh
+
   lint-rust:
     name: Clippy
     runs-on: windows-latest
