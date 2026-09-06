@@ -26,6 +26,7 @@ from ..common.errors import InstrumentConstraintError
 from ..music.events import NoteEvent, group_by_onset, sort_events
 from ..music.importance import ImportanceWeights, compute_importance
 from ..music.key import KeyEstimate, estimate_key
+from ..music.melody import select_melody_line
 from ..music.phrases import Phrase, detect_phrases
 from ..music.quantize import choose_grid, quantize_events
 from ..music.structure import SongStructure, analyze_structure, best_window, recognizability_weights
@@ -312,17 +313,42 @@ def arrange_for_shawzin(
     groups = group_by_onset(live_events, 0.03)
     index_of = {id(e): live_indices[k] for k, e in enumerate(live_events)}
 
+    # Which note carries the tune at each moment. Taking the highest one looks
+    # right and is wrong for anything with two hands in it: when the right hand
+    # rests, the top note becomes the left hand, and the line drops two octaves
+    # and comes back. On one measured track that produced leaps of an octave or
+    # more between 55% of consecutive notes.
+    lead_choice = select_melody_line(
+        groups,
+        importance=[[importance[index_of[id(e)]] for e in g] for g in groups],
+    )
     lead_source: list[int] = []
     lead_pitches: list[int] = []
-    for g in groups:
-        top = max(g, key=lambda e: (e.pitch_midi, importance[index_of[id(e)]]))
-        lead_source.append(index_of[id(top)])
-        lead_pitches.append(top.pitch_midi + transpose)
+    for g, pick in zip(groups, lead_choice):
+        # Where the melody rests, something still has to be played, so fall
+        # back to the top of the chord. The line's own reference skipped this
+        # moment, which is the part that matters: it resumes where the tune
+        # left off rather than from the accompaniment.
+        note = g[pick] if pick is not None else max(g, key=lambda e: e.pitch_midi)
+        lead_source.append(index_of[id(note)])
+        lead_pitches.append(note.pitch_midi + transpose)
 
     costs = MappingCosts().scaled(
         contour_weight=profile.contour_weight, pitch_weight=profile.pitch_error_weight
     )
-    lead_map: list[Candidate] = map_melody(lead_pitches, scale, costs=costs)
+    # Where each phrase begins, in the indices the mapper sees. Register may
+    # change there for free; inside a phrase it is paid for, so a phrase stays
+    # in one octave instead of lurching between them.
+    phrase_starts: list[int] = []
+    if phrases:
+        edges = [ph.start_seconds for ph in phrases]
+        for k, idx in enumerate(lead_source):
+            start = working[idx].start_seconds
+            if any(abs(start - edge) < 0.12 or (k == 0 and start <= edge) for edge in edges):
+                phrase_starts.append(k)
+    lead_map: list[Candidate] = map_melody(
+        lead_pitches, scale, costs=costs, phrase_starts=phrase_starts
+    )
     if progress:
         progress(0.75, "Mapping melody")
 

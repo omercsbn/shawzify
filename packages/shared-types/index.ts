@@ -121,6 +121,16 @@ export interface SourceDto {
   bpmConfidence: number;
   key: KeyEstimateDto | null;
   transcriptionBackend: string;
+  /**
+   * How much the transcription is worth, separately from how well it was
+   * arranged. Compatibility cannot hear the recording, so on audio a high
+   * score means the arrangement is faithful to the notes it was given.
+   */
+  transcriptionTrust: {
+    confidence: number;
+    notesPerSecond: number;
+    label: 'exact' | 'good' | 'uncertain' | 'empty';
+  } | null;
   stemUsed: string;
   contentHash: string;
   warnings: string[];

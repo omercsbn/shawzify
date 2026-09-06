@@ -27,8 +27,10 @@ from .common.logging import get_logger
 from .common.progress import ProgressReporter
 from .common.safety import classify_input, resolve_input_path
 from .midi.reader import MidiFileData, choose_melody_track, parse_midi
+from .music.cleanup import clean_transcription
 from .music.events import NoteEvent
 from .music.key import KeyEstimate, estimate_key
+from .music.trust import TranscriptionTrust, assess_transcription
 from .shawzin.instrument import load_instrument
 from .stems import StemSet, select_separator
 from .transcription import select_transcriber
@@ -55,6 +57,7 @@ class SourceMaterial:
     bpm_confidence: float = 0.0
     stems: StemSet | None = None
     transcription_backend: str = ""
+    trust: TranscriptionTrust | None = None
     stem_used: str = ""
     content_hash: str = ""
     warnings: list[str] = field(default_factory=list)
@@ -69,6 +72,7 @@ class SourceMaterial:
             "bpmConfidence": round(self.bpm_confidence, 3),
             "key": self.key.to_dict() if self.key else None,
             "transcriptionBackend": self.transcription_backend,
+            "transcriptionTrust": self.trust.to_dict() if self.trust else None,
             "stemUsed": self.stem_used,
             "contentHash": self.content_hash[:16],
             "warnings": self.warnings,
@@ -157,6 +161,7 @@ def load_source(
         key = estimate_key(events) if events else None
         return SourceMaterial(
             kind="midi",
+            trust=assess_transcription(events, data.duration, kind="midi"),
             path=str(resolved),
             title=data.title,
             duration=data.duration,
@@ -299,11 +304,37 @@ def load_source(
         )
     reporter.finish("transcribe", "Found " + str(len(events)) + " notes")
 
+    # A transcription is not a score. The notes it invents are few and they are
+    # ruinous, because everything downstream reads the extremes of the note set
+    # rather than its body: on one measured track, 135 notes out of 4829 pushed
+    # pitch accuracy from 56% down to 4.6%.
+    if events:
+        events, cleanup = clean_transcription(events)
+        log.event(
+            "transcription.cleanup",
+            kept=cleanup.kept,
+            outliers=cleanup.outliers_removed,
+            merged=cleanup.fragments_merged,
+            dropped=cleanup.fragments_removed,
+        )
+        note = cleanup.summary()
+        if note:
+            warnings.append(note)
+
     if not events:
         warnings.append(
             "No notes could be transcribed from this audio. It may be percussion-only, "
             "very quiet, or heavily processed."
         )
+
+    # The compatibility score cannot tell a faithful arrangement of the
+    # wrong notes from a faithful arrangement of the right ones. Say which
+    # this is, in its own words, rather than folding it into that number.
+    trust = assess_transcription(events, buffer.duration, kind="audio")
+    note = trust.note()
+    if note:
+        warnings.append(note)
+    log.event("transcription.trust", label=trust.label, confidence=round(trust.confidence, 3))
 
     key = estimate_key(events) if events else None
     if key is None or key.confidence < 0.25:
@@ -314,6 +345,7 @@ def load_source(
 
     return SourceMaterial(
         kind="audio",
+        trust=trust,
         path=str(resolved),
         title=buffer.metadata.title or resolved.stem,
         duration=buffer.duration,

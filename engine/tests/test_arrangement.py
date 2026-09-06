@@ -110,11 +110,33 @@ def test_arrangement_is_deterministic(twinkle):
 # -- scale optimisation --------------------------------------------------
 
 
+def _interval_error(arrangement) -> float:
+    """Mean distance, in semitones, between each melodic step and the original.
+
+    Matched through the decision records, which say which source note each
+    played note came from; matching by position drifts apart at the first
+    removed note.
+    """
+    kept = [
+        d
+        for d in sorted(arrangement.decisions, key=lambda d: d.source_index)
+        if d.output_midi is not None
+    ]
+    if len(kept) < 2:
+        return 0.0
+    error = sum(
+        abs((b.original.pitch_midi - a.original.pitch_midi) - (b.output_midi - a.output_midi))
+        for a, b in zip(kept, kept[1:])
+    )
+    return error / (len(kept) - 1)
+
+
 def test_c_major_melody_prefers_a_diatonic_scale(instrument, c_major_scale):
     a = arrange_for_shawzin(c_major_scale, instrument, bpm=120.0)
     # C major maps perfectly onto the Major scale (or Minor, its relative).
     assert a.report.scale_id in ("maj", "min")
-    assert a.report.compatibility_after.pitch_coverage > 0.95
+    # And it comes out as the same tune: every step the same size as before.
+    assert _interval_error(a) == 0.0
 
 
 def test_chromatic_melody_prefers_the_chromatic_scale(instrument, chromatic_scale):
@@ -122,10 +144,20 @@ def test_chromatic_melody_prefers_the_chromatic_scale(instrument, chromatic_scal
     assert a.report.scale_id == "chrom"
 
 
-def test_auto_transpose_prefers_octave_shifts(instrument, c_major_scale):
-    """Preserving the key beats a marginally better fit in a different one."""
+def test_transposing_beats_folding_a_tune_that_would_not_fit(instrument, c_major_scale):
+    """Given the choice, move the whole tune rather than break its shape.
+
+    This used to assert the opposite: that the transposition stays a whole
+    number of octaves so the key is preserved. Measuring real tracks showed
+    what that costs. Keeping the key and folding what does not fit leaves every
+    pitch class right and every leap wrong, which is precisely the case where
+    people say the notes are correct but the song is unrecognisable. A
+    transposed tune is still the tune; a folded one is not.
+    """
     a = arrange_for_shawzin(c_major_scale, instrument, bpm=120.0)
-    assert a.report.transpose % 12 == 0
+    folded = [d for d in a.decisions if any("fold" in str(op) for op in d.operations)]
+    assert folded == []
+    assert _interval_error(a) == 0.0
 
 
 def test_pinned_scale_is_honoured(instrument, twinkle):
@@ -392,3 +424,50 @@ def test_shawzin_variant_changes_the_constraint(instrument, chord_progression):
     assert_playable(a)
     for ev in a.song.events:
         assert len(ev.string) == 1
+
+
+def test_range_beats_pitch_classes_when_the_tune_is_wide(instrument):
+    """A tune wider than the scale should not be squeezed into the chromatic one.
+
+    Chromatic has every pitch class and less than one octave of range. The
+    search used to take it for exactly that reason, because coverage counted an
+    octave-folded note as a perfect hit. Measured on a real vocal line, that
+    left every leap 3.46 semitones out against 1.57 for a scale with room, and
+    listeners could not recognise the song. Range is not a tie-breaker here.
+    """
+    from shawzify_engine.music.events import NoteEvent
+
+    # Two and a half octaves of a plain minor line, well past chromatic's reach.
+    pitches = [57, 60, 64, 67, 72, 76, 79, 76, 72, 67, 64, 60, 57]
+    events = [
+        NoteEvent(
+            pitch_midi=p,
+            start_seconds=i * 0.4,
+            duration_seconds=0.35,
+            velocity=0.8,
+            confidence=1.0,
+        )
+        for i, p in enumerate(pitches)
+    ]
+
+    a = arrange_for_shawzin(events, instrument, bpm=120.0)
+    scale = instrument.scale(a.report.scale_id)
+    span = scale.playable_midi[-1] - scale.playable_midi[0]
+
+    assert a.report.scale_id != "chrom"
+    assert span >= 18, "chose a scale too narrow to hold the melody"
+    assert _interval_error(a) < 2.0
+
+
+def test_scoring_weights_cannot_saturate(instrument, c_major_scale):
+    """Every candidate scoring 1.0 is not a decision, it is a coin toss.
+
+    The caller normalises its own weights, so a term added to the scorer later
+    fell outside that sum, pushed good candidates past 1.0, and the clamp
+    flattened them into a tie broken by list order. A perfect mapping lost to a
+    worse one that way.
+    """
+    a = arrange_for_shawzin(c_major_scale, instrument, bpm=120.0)
+    top = a.scale_candidates[:5]
+    assert top[0].score < 1.0 or len({round(c.score, 6) for c in top}) > 1
+    assert _interval_error(a) == 0.0

@@ -181,6 +181,14 @@ export function Workspace() {
             {source.kind !== 'midi' && source.stemUsed !== 'full'
               ? ` · ${source.stemUsed} stem`
               : ''}
+            {source.transcriptionTrust &&
+            !['exact', 'good'].includes(source.transcriptionTrust.label) ? (
+              <span className="text-amber-bright">
+                {source.transcriptionTrust.label === 'empty'
+                  ? ' · little was transcribed'
+                  : ' · uncertain transcription'}
+              </span>
+            ) : null}
           </div>
         </div>
         <div className="flex items-center gap-7 shrink-0">

@@ -11,6 +11,58 @@ as no longer reproducible.
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-09-06
+
+Arrangement quality, driven by measuring real tracks rather than fixtures:
+Clubbed to Death, BFG Division, a Turkish pop song, and Für Elise as a control.
+The interesting part is that the twelve-note limit was not the problem in any
+of them.
+
+### Fixed
+
+- **A handful of invented notes decided the whole arrangement.** Automatic
+  transcription reports notes that are not there, and every decision that
+  follows read the extremes of the note set rather than its body. On Clubbed to
+  Death, 135 notes out of 4829 stretched the apparent range by two octaves and
+  took pitch accuracy from 56% to 4.6%. Transcriptions are now cleaned first:
+  pitch accuracy 4.6% → 58.9%, overall 63.2 → 80.1.
+- **The scale search chose the least recognisable option.** It took Chromatic
+  for a vocal line — every pitch class, 0.92 of an octave of range — folding
+  half the melody so every leap was 3.46 semitones wrong against 1.57 for
+  Minor. Interval fidelity is now scored directly, and an octave fold no longer
+  counts as a perfect hit, which is how a scale that folded 61% of a piece used
+  to score 96.4% covered. Interval error roughly halved on every track tested.
+- **Scoring weights could saturate.** The caller normalised its own weights, so
+  a term added later fell outside that sum, pushed candidates past 1.0, and the
+  clamp flattened them into a tie broken by list order. On an eight-note C
+  major scale a perfect mapping lost to one that bent a note.
+- **The melody was "the highest note sounding".** For anything with two hands
+  that is not a melody: when the right hand rests the top note becomes the left
+  hand. That line leapt an octave or more between 55% of consecutive notes.
+  It is now tracked as a line, and allowed to rest — 55% → 3.1% on that track,
+  37.6% → 0.4% on Für Elise.
+- **A Turkish filename killed a finished conversion.** Printing
+  `şarkı — 音楽.mid` raised UnicodeEncodeError on a console using a legacy code
+  page, after all the work was done. Also: `decode ""` died inside pathlib, and
+  an unknown scale reached the user as `KeyError`.
+- **The browser interface could not open or save files.** Every file button
+  called a native dialog that returns null outside the desktop shell, so it did
+  nothing at all, silently. Uploads and downloads now go through the local
+  server, and drag and drop works.
+- **A refused request broke every later request on the same connection.** The
+  server answered 403 without reading the body, so the leftover bytes were
+  parsed as the next request line.
+
+### Added
+
+- The compatibility score now says what it does not know: it measures the
+  arrangement against the transcription and never hears the recording. Stated
+  on every audio source, with an uncertain transcription marked in the
+  interface.
+- A recovery panel when the engine is missing, listing the interpreters found
+  on the machine, with a picker that remembers the choice.
+
+
 ## [0.1.1] — 2026-09-05
 
 ### Fixed
@@ -108,6 +160,7 @@ The first release. Everything below is new.
 - Structured local logging, cached pipeline stages keyed by content hash and
   algorithm version, and project files that record what produced them.
 
-[Unreleased]: https://github.com/omercsbn/shawzify/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/omercsbn/shawzify/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/omercsbn/shawzify/releases/tag/v0.2.0
 [0.1.1]: https://github.com/omercsbn/shawzify/releases/tag/v0.1.1
 [0.1.0]: https://github.com/omercsbn/shawzify/releases/tag/v0.1.0

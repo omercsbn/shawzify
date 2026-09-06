@@ -37,6 +37,15 @@ class MappingCosts:
     pitch_displacement: float = 1.0
     pitch_class_miss: float = 6.0
     octave_shift: float = 2.2
+    #: Cost of moving to a different octave than the previous note used.
+    #:
+    #: Without this, the octave was effectively chosen per note. A reviewer
+    #: spotted it from a skim of the source and was right: measured on Fur
+    #: Elise, 53% of consecutive notes inside a phrase changed register, and
+    #: one phrase was spread over four octaves. Each note was individually
+    #: reasonable and the line lurched between registers. Folding is a decision
+    #: about a phrase, not about a note.
+    register_change: float = 3.4
     range_edge: float = 1.2
     voice_leading: float = 0.55
     contour_break: float = 5.0
@@ -47,6 +56,7 @@ class MappingCosts:
             pitch_displacement=self.pitch_displacement * pitch_weight,
             pitch_class_miss=self.pitch_class_miss * pitch_weight,
             octave_shift=self.octave_shift,
+            register_change=self.register_change,
             range_edge=self.range_edge,
             voice_leading=self.voice_leading,
             contour_break=self.contour_break * contour_weight,
@@ -108,11 +118,25 @@ def _node_cost(c: Candidate, scale: ShawzinScale, costs: MappingCosts) -> float:
 
 
 def _transition_cost(
-    prev_src: int, prev_out: Candidate, cur_src: int, cur_out: Candidate, costs: MappingCosts
+    prev_src: int,
+    prev_out: Candidate,
+    cur_src: int,
+    cur_out: Candidate,
+    costs: MappingCosts,
+    *,
+    new_phrase: bool = False,
 ) -> float:
     src_interval = cur_src - prev_src
     out_interval = cur_out.midi - prev_out.midi
     cost = costs.voice_leading * min(abs(out_interval), 24) / 12.0
+
+    # Staying in one register matters within a phrase and not across phrases:
+    # a phrase that begins somewhere new sounds like a phrase, whereas a note
+    # that jumps mid-phrase sounds like a mistake. Folding an octave can even
+    # *shrink* the output interval, so without this the voice-leading term
+    # rewarded it.
+    if not new_phrase and cur_out.octave_shift != prev_out.octave_shift:
+        cost += costs.register_change * abs(cur_out.octave_shift - prev_out.octave_shift)
 
     if src_interval == 0:
         cost += costs.contour_break if out_interval != 0 else 0.0
@@ -131,12 +155,18 @@ def map_melody(
     *,
     costs: MappingCosts | None = None,
     max_octave_shift: int = 2,
+    phrase_starts: Sequence[int] | None = None,
 ) -> list[Candidate]:
-    """Viterbi over candidate sets. Returns one candidate per input pitch."""
+    """Viterbi over candidate sets. Returns one candidate per input pitch.
+
+    ``phrase_starts`` gives the indices that begin a phrase, where changing
+    register is free. Everywhere else it is paid for.
+    """
     if not pitches:
         return []
     c = costs or MappingCosts()
     lattice = [candidates_for(p, scale, max_octave_shift=max_octave_shift) for p in pitches]
+    boundaries = set(phrase_starts or ())
 
     n = len(pitches)
     best_cost: list[list[float]] = [[0.0] * len(col) for col in lattice]
@@ -152,7 +182,7 @@ def map_melody(
             arg = 0
             for k, prev in enumerate(lattice[i - 1]):
                 total = best_cost[i - 1][k] + _transition_cost(
-                    pitches[i - 1], prev, pitches[i], cand, c
+                    pitches[i - 1], prev, pitches[i], cand, c, new_phrase=i in boundaries
                 )
                 if total < best:
                     best = total

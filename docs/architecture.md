@@ -177,6 +177,39 @@ remember -- plus energy, density and a mild preference for the middle.
 It feeds two things: the Hook focus mode, and an importance multiplier so
 density reduction sacrifices an intro before it touches a chorus.
 
+### 0.5 Cleaning the transcription (`music/cleanup.py`)
+
+A transcription is not a score. It reports notes that are not there:
+harmonics an octave or two above the melody, rumble below it, fragments where a
+sung note wavered. They are a small fraction of the total and they are ruinous,
+because every decision that follows reads the *extremes* of the note set rather
+than its body. On Rob Dougan's "Clubbed to Death", 135 notes out of 4829 --
+under three percent -- stretched the apparent range by two octaves and took
+pitch accuracy from 56% down to 4.6%.
+
+Both rules are conservative, because discarding a real note is worse than
+keeping an invented one. An outlying pitch is dropped only when the transcriber
+was also unsure of it, so a real piccolo survives. A note shorter than one
+Shawzin tick is merged into the note beside it where there is one, and dropped
+only when it is alone. MIDI input never goes through this: a MIDI file is exact
+and its extremes are the composer's.
+
+### 0.75 Finding the melody (`music/melody.py`)
+
+Taking the highest note sounding at each moment is the obvious way to find a
+melody and it is wrong for anything with two hands in it. When the right hand
+rests, the top note becomes the left hand, so the line drops two octaves and
+climbs back: on Clubbed to Death that line leapt an octave or more between 55%
+of consecutive notes, with a mean leap of 14.5 semitones.
+
+A small dynamic program picks the line instead, preferring to continue where
+the melody was, biased towards the upper voice and towards notes the importance
+model rates highly -- and allowed to rest. That last part mattered most. A line
+forced to pick a note from every moment abandons a resting tune and follows the
+unbroken accompaniment, which is exactly what it did. With rests available the
+same line leaps an octave 3.1% of the time and moves by 2.6 semitones on
+average, which is what a melody looks like.
+
 ### 1. Importance (`music/importance.py`)
 
 Every source note gets a 0–1 score from six weighted factors: transcription
@@ -204,6 +237,16 @@ importance-weighted coverage, range fit, contour preservation and tonal
 anchoring against the detected key. Near-ties prefer the transposition that
 changes the music least: a whole-octave shift keeps the key, a semitone shift
 does not, so they are penalised very differently.
+
+Interval fidelity is weighted as heavily as pitch-class accuracy, because
+people recognise a tune by the distances between its notes. Without that term
+the search took the Chromatic scale for a vocal line -- every pitch class, and
+0.92 of an octave of range -- so half the melody was folded and every leap came
+out 3.46 semitones wrong against 1.57 for the Minor scale. Every note correct,
+the song gone.
+
+An octave fold no longer counts as a perfect hit either. It used to, which is
+how a scale that folded 61% of a piece could score 96.4% covered.
 
 This is a fast analytic model, not a trial arrangement. Only the winner is
 arranged for real, but the shortlist is reported so the UI can offer the
@@ -269,6 +312,19 @@ so comparing note length against the note gap in absolute terms rates them all
 the same. The score is distance from an *ideal* length for this music -- about
 four notes' worth of ring -- which is what makes a 28-second Lizzie rank below a
 2-second Dax on fast material and above it on very slow material.
+
+## What the compatibility score does not know
+
+It measures how much of the note set the arranger was handed survived the
+instrument. It never hears the recording. Feed it a transcription that missed
+the music and it will report a high number with complete confidence: BFG
+Division transcribed to 1.6 notes per second over a track whose riff runs at
+eight to sixteen, and arranging that scored 88%.
+
+`music/trust.py` states this on every audio source rather than trying to hide
+it behind a single blended number, and marks a transcription that should not be
+trusted. It deliberately does not claim to detect the BFG case; two ways of
+doing that were measured and both failed, and the module records why.
 
 ## Determinism
 
