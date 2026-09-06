@@ -65,3 +65,25 @@ def test_the_normal_confidence_band_is_not_treated_as_a_failure():
     """
     for confidence in (0.46, 0.50, 0.52):
         assert assess_transcription(notes(40, confidence=confidence), 20.0).label == "good"
+
+
+def test_a_thin_but_not_empty_transcription_is_not_flagged():
+    """The BFG Division case, locked in as documented rather than claimed.
+
+    1.8 notes per second over a track whose riff runs at eight to sixteen is a
+    failed transcription, and this module cannot tell it from an honest sparse
+    ballad. Three detectors were tried; the docstring records all three. This
+    test exists so the docstring cannot quietly become untrue: if someone raises
+    the threshold to catch this track, they have to come here and argue for it.
+    """
+    events = [
+        NoteEvent(pitch_midi=52 + (i % 4), start_seconds=i * 0.55,
+                  duration_seconds=0.3, velocity=0.8, confidence=0.5)
+        for i in range(180)
+    ]
+    trust = assess_transcription(events, 100.0, kind="audio")
+
+    assert trust.notes_per_second > 1.5
+    assert trust.label == "good"
+    note = trust.note()
+    assert note and "cannot hear the recording" in note
