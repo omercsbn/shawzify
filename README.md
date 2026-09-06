@@ -4,6 +4,10 @@
 
 **Turn any song into a Shawzin performance.**
 
+Some songs survive twelve notes and some do not. [What it is good at, and
+what it is not](#limitations) is worth two minutes before your first
+conversion.
+
 Drop a song. Play it in Warframe.
 
 [![CI](https://github.com/omercsbn/shawzify/actions/workflows/ci.yml/badge.svg)](https://github.com/omercsbn/shawzify/actions/workflows/ci.yml)
@@ -292,8 +296,16 @@ directory and never includes file contents.
 ## Limitations
 
 * Audio transcription is genuinely hard. A solo instrument or a clear vocal
-  transcribes well; a dense, heavily produced mix does not, and the reported
-  compatibility will say so honestly rather than flattering the result.
+  transcribes well; a dense, heavily produced mix does not.
+* The compatibility score cannot hear your recording, and this used to be
+  claimed the other way round here. It measures how faithfully the arrangement
+  keeps the notes it was handed. Hand it a transcription that missed the music
+  and it will report a high number in good faith: a metal track that transcribed
+  to 1.6 notes per second, over a riff that runs at eight to sixteen, arranged to
+  88%. The number was true and the answer was useless. The app now says which
+  kind of score you are looking at, and warns outright when a transcription came
+  back near-empty. Detecting the middle of that range automatically was tried and
+  abandoned, for reasons recorded in `engine/shawzify_engine/music/trust.py`.
 * The Shawzin's four-minute limit is real. Longer songs are split into parts at
   phrase boundaries, never truncated.
 * The engine's absolute pitch reference follows ShawzinBot's table; the

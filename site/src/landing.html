@@ -40,7 +40,7 @@
     <div class="card">
       <span class="tag">Scale search</span>
       <h3>Nine scales, twenty-five transpositions</h3>
-      <p>Each candidate is scored on pitch-class coverage, importance-weighted coverage, range fit, contour preservation and tonal anchoring. Near-ties prefer the shift that changes the music least — an octave keeps the key, a semitone does not.</p>
+      <p>Each candidate is scored on interval fidelity, pitch-class coverage, importance-weighted coverage, range fit, contour preservation and tonal anchoring. Intervals carry as much weight as coverage on purpose: a scale that owns every note of the melody but has to fold half of them into another octave has kept the pitch classes and thrown away the tune.</p>
     </div>
     <div class="card">
       <span class="tag">Mapping</span>
@@ -88,7 +88,7 @@
   <h2>It tells you what it did to your song</h2>
   <div class="split">
     <ul class="plain">
-      <li><b>A compatibility score that means something.</b> Weighted by note importance across pitch error, timing shift, melody retention and harmony survival — not <code>playable / total</code>, which would rate anything already in C pentatonic at 100% no matter how badly it was arranged.</li>
+      <li><b>A compatibility score that means something.</b> Weighted by note importance across pitch error, timing shift, melody retention and harmony survival — not <code>playable / total</code>, which would rate anything already in C pentatonic at 100% no matter how badly it was arranged. On audio it says so plainly: it measures the arrangement, and it cannot hear your recording, so a high score means the arrangement was faithful to the notes that were transcribed.</li>
       <li><b>A reason on every changed note.</b> Moved down an octave to stay in range; folded into a Shawzin chord; dropped because three notes already sound on that fret. The piano roll colours them and the panel explains them.</li>
       <li><b>Nothing is quietly cut.</b> A song over four minutes or a thousand notes is split at phrase boundaries into parts you import one after another. It never truncates and pretends.</li>
       <li><b>The runners-up are shown.</b> The scale search reports the alternatives with their scores, so you can overrule it and hear why it chose what it chose.</li>
@@ -113,6 +113,37 @@
         </p>
       </div>
     </div>
+  </div>
+</section>
+
+<section class="band">
+  <h2>What it is good at, and what it is not</h2>
+  <p class="sub">Measured on real tracks, not assumed. The instrument has twelve notes; some
+  music survives that and some music does not, and you should know which before you spend
+  ten minutes on a conversion.</p>
+  <div class="split">
+    <ul class="plain">
+      <li><b>MIDI is exact.</b> Nothing is guessed. Every note is the composer's, so the only
+      question is what the arrangement does with it. If you can find a MIDI of the song, use it.</li>
+      <li><b>Solo piano, single voices and clear melodic lines come out well.</b> One instrument
+      carrying a tune is the case the whole pipeline is built around.</li>
+      <li><b>Dense mixes lose the parts you would have wanted.</b> Automatic transcription hears
+      a wall of guitars as a smear. It is not that the arrangement is wrong, it is that the notes
+      it was given were never the riff.</li>
+      <li><b>Percussion, heavy distortion and very quiet recordings can produce almost nothing.</b>
+      When that happens the app tells you instead of arranging silence and reporting a good score.</li>
+    </ul>
+    <ul class="plain">
+      <li><b>Try Stem Source before you give up on a track.</b> Isolating <em>vocals</em> often
+      recovers a melody the full mix buried, because one line transcribes far better than five.</li>
+      <li><b>Uncertain notes are removed before they can do damage.</b> A transcriber invents
+      harmonics above the melody and rumble below it. On one real track 135 invented notes out of
+      4829 stretched the apparent range by two octaves and took pitch accuracy from 56% down to
+      4.6%. They are dropped, and you are told how many.</li>
+      <li><b>The melody is followed, not skimmed.</b> Taking the highest note at each moment
+      makes the "tune" hop between instruments. A dynamic-programming pass follows one line
+      through the piece, which cut mid-phrase octave jumps from 55% of notes to 3%.</li>
+    </ul>
   </div>
 </section>
 
